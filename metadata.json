@@ -1,0 +1,6 @@
+{
+  "name": "Mẹ và Bé",
+  "description": "Cẩm nang chăm sóc thai kỳ thông minh theo từng tuần, nhắc nhở lịch khám, uống thuốc dãn cách thông minh và 100% Offline-First.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
