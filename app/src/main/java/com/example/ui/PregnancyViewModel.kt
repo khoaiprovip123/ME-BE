@@ -526,6 +526,23 @@ class PregnancyViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun resetToStandardMilestones() {
+        viewModelScope.launch {
+            val user = currentUserState.value ?: return@launch
+            val repo = repository ?: return@launch
+
+            // Cancel any scheduled notifications for current appointments
+            val currentAppts = allAppointmentsState.value
+            val app = getApplication<Application>()
+            for (appt in currentAppts) {
+                PregnancyNotifier.cancelScheduledAlert(app, appt.id)
+            }
+
+            // Perform force re-seed in repository
+            repo.seedDefaultDataForUser(user, forceResetAppts = true)
+        }
+    }
+
     // Helper functions for date calculations
     fun calculatePregnancyWeek(lmpStr: String?, eddStr: String?): Int {
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())

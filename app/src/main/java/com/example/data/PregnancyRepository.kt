@@ -94,33 +94,49 @@ class PregnancyRepository(private val database: AppDatabase) {
         seedDefaultDataForUser(currentUser)
     }
 
-    suspend fun seedDefaultDataForUser(user: UserEntity) {
+    suspend fun seedDefaultDataForUser(user: UserEntity, forceResetAppts: Boolean = false) {
         val hasGestationDates = !user.lmpDate.isNullOrBlank() || !user.eddDate.isNullOrBlank()
+
+        if (forceResetAppts) {
+            appointmentDao.deleteAllAppointments()
+        }
 
         // Seed default critical medical milestones if the table empty and user has setup gestation dates
         val apptCount = appointmentDao.countAppointments()
         if (apptCount == 0 && hasGestationDates) {
-            val milestoneWeeks = listOf(12, 22, 26, 32, 37)
+            val milestoneWeeks = listOf(6, 12, 16, 22, 26, 32, 35, 37, 39)
             val milestoneNames = listOf(
-                "Khám thai Mốc 1: Siêu âm đo Độ mờ da gáy NT & Double Test",
-                "Khám thai Mốc 2: Siêu âm 4D hình thái toàn diện bé yêu",
-                "Khám thai Mốc 3: Nghiệm pháp dung nạp Glucose của mẹ",
-                "Khám thai Mốc 4: Siêu âm Doppler mạch, ngôi thai lý tưởng",
-                "Khám thai Mốc cận sinh: Chạy Monitor NST kiểm tra tim thai"
+                "Khám mốc 1 (T6): Siêu âm kiểm tra phôi thai & tim thai thứ nhất",
+                "Khám mốc 2 (T12): Đo độ mờ da gáy NT & Double Test sàng lọc dị tật",
+                "Khám mốc 3 (T16): Khám thường quy kỳ II & Xét nghiệm Triple Test bổ sung",
+                "Khám mốc 4 (T22): Siêu âm 4D dựng hình thái tầm soát dị tật toàn diện",
+                "Khám mốc 5 (T26): Làm nghiệm pháp dung nạp Glucose tầm soát tiểu đường",
+                "Khám mốc 6 (T32): Siêu âm Doppler đo trở kháng bánh nhau & lượng ối",
+                "Khám mốc 7 (T35): Xét nghiệm liên cầu GBS & tiêm phòng Uốn ván",
+                "Khám mốc 8 (T37): Chạy máy Monitor NST tuần đều đặn ghi nhận tim thai",
+                "Khám mốc 9 (T39): Kiểm tra ngôi thai sát sinh, đo ối & dự phòng sinh sản"
             )
             val milestoneClinics = listOf(
                 "Phòng khám Sản Phụ khoa Trung ương",
+                "Trung tâm Sàng lọc Trước sinh Quốc gia",
+                "Khoa Sản - Bệnh viện Phụ sản Hà Nội",
                 "Phòng siêu âm 4D hình thái học Sản khoa",
-                "Khoa Xét nghiệm - Bệnh viện Phụ sản Hà Nội",
+                "Khoa Xét nghiệm - Bệnh viện Phụ sản Trung ương",
                 "Bệnh viện Sản Phụ khoa Quốc tế",
-                "Phòng cấp cứu Sản khoa & Chạy máy NST"
+                "Bệnh viện Phụ sản - Khoa khám yêu cầu",
+                "Phòng cấp cứu Sản khoa & Chạy máy NST",
+                "Phòng khám Sản Phụ khoa Đương đại"
             )
             val milestoneNotes = listOf(
-                "Đặc biệt quan trọng tầm soát sụn da gáy, dị tật nhiễm sắc thể Down/Patau ở mốc tuần 11-13.",
-                "Rà soát 2 bán cầu não bộ, sứt môi hở hàm ếch, chi tiết ổ bụng các ngón chân mầm tim của bé.",
-                "Nhịn ăn sáng ít nhất 8 tiếng trước khi thực hiện lấy máu thử dung nạp tiểu đường thai kỳ.",
-                "Đánh giá bánh nhau vôi hóa, dây rốn thắt nút, độ dày ối đo lường nguy cơ hạn chế phát triển.",
-                "Chạy Monitor đo biểu đồ cơn gò sinh lý tử cung và đo tim thai dự báo thiếu oxy cấp."
+                "Xác định thai chính thức làm tổ an toàn trong buồng tử cung và đánh giá sự hiện diện của tim thai sơ khởi.",
+                "Mốc vàng DUY NHẤT tầm soát bất thường dị tật nhiễm sắc thể Down/Edwards/Patau khoảng tuần 11 đến 13.",
+                "Đo huyết áp cơ thể mẹ phòng chống tiền sản giật và thực hiện Triple Test nếu chưa đo mốc tuần 12.",
+                "Rà soát kĩ lưỡng hình thái mắt tai, khe hở vòm miệng sơ bộ, cấu trúc tim phổi bẩm sinh và chi tiết ngón tay chân.",
+                "Nhịn ăn sáng ít nhất 8 tiếng trước khi làm lấy máu. Giúp phát hiện sớm đái tháo đường thai kỳ phòng ngừa đa ối.",
+                "Đo trở kháng động mạch rốn, động mạch não giữa của bé nhằm kịp thời can thiệp nếu xuất hiện thai chậm phát triển.",
+                "Sàng lọc liên cầu khuẩn GBS âm đạo mẹ bầu, tiêm phòng uốn ván và đánh giá sơ bộ thể trạng chuyển dạ sinh sớm.",
+                "Chạy máy Monitor sản khoa liên tục ghi nhận đồ thị dao động tim thai và mức độ đáp ứng co bóp cơ tử cung.",
+                "Kiểm tra vị trí ngôi thai đầu thuận lợi hay ngược, chỉ số nước ối đục trong, đo khung chậu xương đùi sẵn sàng sinh."
             )
 
             for (i in milestoneWeeks.indices) {
@@ -132,7 +148,7 @@ class PregnancyRepository(private val database: AppDatabase) {
                         targetWeek = targetW,
                         scheduledDate = calcDate,
                         clinicName = milestoneClinics[i],
-                        doctorName = "Bác sĩ Trưởng khoa Chẩn đoán",
+                        doctorName = "Bác sĩ Trưởng khoa Sản",
                         medicalNotes = milestoneNotes[i],
                         status = "PENDING",
                         isCritical = true

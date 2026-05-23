@@ -53,6 +53,9 @@ interface AppointmentDao {
 
     @Query("SELECT COUNT(*) FROM medical_appointments")
     suspend fun countAppointments(): Int
+
+    @Query("DELETE FROM medical_appointments")
+    suspend fun deleteAllAppointments()
 }
 
 @Dao

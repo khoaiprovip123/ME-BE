@@ -1032,435 +1032,464 @@ fun AppointmentsTab(
     selectedWeek: Int
 ) {
     val focusManager = LocalFocusManager.current
-    var clinic by remember { mutableStateOf("") }
-    var doctor by remember { mutableStateOf("") }
-    var date by remember { mutableStateOf("") }
-    var notes by remember { mutableStateOf("") }
-    var targetWeekStr by remember { mutableStateOf(selectedWeek.toString()) }
+    var showAddDialog by remember { mutableStateOf(false) }
     var editingAppointment by remember { mutableStateOf<AppointmentEntity?>(null) }
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-        contentPadding = PaddingValues(bottom = 24.dp, top = 10.dp)
-    ) {
-        // Gold checkup weeks overview
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = AmberBg),
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, AlertBorder)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "⭐ Lịch Trình Kiểm Tra Thai Mốc Vàng (WHO)",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = AmberText
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "• Tuần 11-13: Khảo sát độ mờ da gáy NT phòng dị tật nhiễm sắc thể.\n" +
-                               "• Tuần 20-24: Siêu âm 4D rà soát toàn bộ hình thái cơ quan của bé.\n" +
-                               "• Tuần 24-28: Khám huyết áp & thử nghiệm pháp Glucose dũng đường.\n" +
-                               "• Tuần 32: Đánh giá Doppler bánh nhau, nước ối và cân nặng bé.\n" +
-                               "• Tuần 36+: Chạy Monitor tim thai NST đều đặn hàng tuần phòng lưu thai.",
-                        fontSize = 11.5.sp,
-                        color = AmberText,
-                        lineHeight = 17.sp
-                    )
-                }
-            }
-        }
-
-        // Live status bar test action card
-        item {
-            val context = LocalContext.current
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        PregnancyNotifier.sendNotificationImmediately(
-                            context = context,
-                            title = "📅 Nhắc nhở: Lịch khám thai tuần mốc vàng",
-                            message = "Mẹ bầu ơi! Lịch hẹn siêu âm khảo sát dị tật mốc vàng của tuần này đã đến giờ rồi. Chúc mẹ đi khám may mắn thuận buồm xuôi gió nhé!",
-                            itemId = "WHO_GOLD_MOCK_ID",
-                            type = "APPOINTMENT",
-                            targetTab = 1
-                        )
-                    },
-                colors = CardDefaults.cardColors(containerColor = SoftPeachPrimary.copy(alpha = 0.4f)),
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, DeepBrownSecondary.copy(alpha = 0.2f))
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Notifications,
-                        contentDescription = null,
-                        tint = DeepBrownSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "🔔 Thử nghiệm thông báo trên điện thoại",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = DeepBrownSecondary
-                        )
-                        Text(
-                            text = "Bấm vào card này để test thử chuông/rung báo Lịch Khám trên thanh trạng thái ngay lập tức!",
-                            fontSize = 11.sp,
-                            color = DarkBrownText
-                        )
-                    }
-                    Text("TEST", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = DeepBrownSecondary, modifier = Modifier.padding(horizontal = 4.dp))
-                }
-            }
-        }
-
-        // Check if selected week is a golden week
-        if (isGoldenWeek(selectedWeek)) {
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(bottom = 90.dp, top = 10.dp)
+        ) {
+            // Gold checkup weeks overview
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = WarmPeachCard),
-                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = AmberBg),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, AlertBorder)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = "Mốc Vàng",
-                            tint = DarkBrownText,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
+                    Column(modifier = Modifier.padding(16.dp)) {
                         Text(
-                            text = "MỐC KHÁM SẢN KHOA VÀNG Ở TUẦN THẮT $selectedWeek! Vui lòng đặt hẹn ngay.",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = DarkBrownText
+                            text = "⭐ Lịch Trình Kiểm Tra Thai Mốc Vàng (WHO)",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = AmberText
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "• Tuần 6-8: Xác nhận thai vô tổ, siêu âm kích thước & kiểm tra tim thai sơ khởi.\n" +
+                                   "• Tuần 11-13: Khảo sát độ mờ da gáy NT phòng dị tật nhiễm sắc thể.\n" +
+                                   "• Tuần 20-24: Siêu âm 4D rà soát toàn bộ hình thái cơ quan của bé.\n" +
+                                   "• Tuần 24-28: Khám huyết áp & thử nghiệm pháp Glucose dung nạp tiểu đường.\n" +
+                                   "• Tuần 32: Đánh giá Doppler bánh nhau, nước ối và cân nặng bé.\n" +
+                                   "• Tuần 35-37+: Chạy Monitor tim thai NST đều đặn hàng tuần phòng biến chứng.",
+                            fontSize = 11.5.sp,
+                            color = AmberText,
+                            lineHeight = 17.sp
                         )
                     }
                 }
             }
-        }
 
-        // Add Appointment Form
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = WhiteCard),
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, LightBorder)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "📱 Lên Lịch Hẹn Khám Thai Offline",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = DeepBrownSecondary
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    PregnancyTextField(
-                        value = targetWeekStr,
-                        onValueChange = { targetWeekStr = it },
-                        label = "Tuần thai khám (1..41)",
-                        modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    PregnancyDatePickerField(
-                        label = "Ngày hẹn khám",
-                        currentDateYmd = date,
-                        onDateSelected = { date = it },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    PregnancyTextField(
-                        value = clinic,
-                        onValueChange = { clinic = it },
-                        label = "Tên phòng khám / Bệnh viện",
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    PregnancyTextField(
-                        value = doctor,
-                        onValueChange = { doctor = it },
-                        label = "Bác sĩ phụ trách chính",
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    PregnancyTextField(
-                        value = notes,
-                        onValueChange = { notes = it },
-                        label = "Ghi chú, lời nhắc bác dặn",
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = false,
-                        maxLines = 2
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    LiquidGlassButton(
-                        onClick = {
-                            val w = targetWeekStr.toIntOrNull() ?: selectedWeek
-                            if (date.isNotBlank()) {
-                                viewModel.addAppointment(
-                                    week = w,
-                                    date = date,
-                                    clinic = clinic,
-                                    doctor = doctor,
-                                    notes = notes,
-                                    isCritical = isGoldenWeek(w)
-                                )
-                                clinic = ""
-                                doctor = ""
-                                notes = ""
-                                focusManager.clearFocus()
-                            }
-                        },
-                        modifier = Modifier
-                            .testTag("add_appointment_btn")
-                            .fillMaxWidth()
-                    ) {
-                        Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = Color.White)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Xác Nhận Đặt Lịch Offline", color = Color.White, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-
-        // Scheduled list Title
-        item {
-            Text(
-                text = "Lịch Trình Hẹn Khám Thực Tế",
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                color = DeepBrownSecondary
-            )
-        }
-
-        // Render Scheduled list
-        if (allAppointments.isEmpty()) {
+            // Sync 9 standard medical milestones card
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = WhiteCard),
-                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = WarmPeachCard.copy(alpha = 0.5f)),
+                    shape = RoundedCornerShape(14.dp),
                     border = BorderStroke(1.dp, LightBorder)
                 ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
                         Text(
-                            text = "Chưa có cuộc hẹn khám thai nào được thiết lập.",
-                            color = TextMuted,
-                            fontSize = 12.sp,
-                            textAlign = TextAlign.Center
+                            text = "🏥 Đồng Bộ 9 Mốc Khám Chuẩn Bộ Y Tế",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = DeepBrownSecondary
                         )
-                        if (selectedWeek == -1) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Để đảm bảo đầy đủ các mốc khám thai quan trọng, mẹ bấm chọn nút dưới đây để hệ thống tự động lập sẵn lộ trình 9 mốc khám chuẩn Việt Nam chính xác tương ứng ngày dự sinh của mẹ nhé!",
+                            fontSize = 11.sp,
+                            color = TextSlate,
+                            lineHeight = 16.sp
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        OutlinedButton(
+                            onClick = { viewModel.resetToStandardMilestones() },
+                            border = BorderStroke(1.dp, DeepBrownSecondary.copy(alpha = 0.5f)),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            contentPadding = PaddingValues(vertical = 4.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    tint = DeepBrownSecondary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "Thiết lập lại 9 mốc khám Bộ Y Tế",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = DeepBrownSecondary
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Check if selected week is a golden week
+            if (isGoldenWeek(selectedWeek)) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = WarmPeachCard),
+                        shape = RoundedCornerShape(12.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = "Mốc Vàng",
+                                tint = DarkBrownText,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "💡 Hãy thiết lập Ngày dự sinh (EDD) trong mục Cá nhân để hệ thống tự động gợi ý toàn bộ lịch trình khám thai mốc vàng cho bạn nhé!",
-                                color = DeepBrownSecondary,
-                                fontSize = 11.5.sp,
-                                fontWeight = FontWeight.Medium,
+                                text = "MỐC KHÁM SẢN KHOA VÀNG Ở TUẦN THẮT $selectedWeek! Vui lòng đặt hẹn ngay.",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = DarkBrownText
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Scheduled list Title
+            item {
+                Text(
+                    text = "🗒️ Danh Sách Lịch Hẹn Khám Thai Đã Lên",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = DeepBrownSecondary
+                )
+            }
+
+            if (allAppointments.isEmpty()) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, LightBorder)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DateRange,
+                                contentDescription = null,
+                                tint = TextMuted,
+                                modifier = Modifier.size(36.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Chưa có lịch hẹn khám nào được tạo.",
+                                color = TextMuted,
+                                fontSize = 12.sp
+                            )
+                            Text(
+                                text = "Bấm dấu + tròn bên dưới để thêm lịch hẹn khám thai định kỳ.",
+                                color = TextMuted,
+                                fontSize = 11.sp,
                                 textAlign = TextAlign.Center
                             )
                         }
                     }
                 }
-            }
-        } else {
-            items(allAppointments) { appt ->
-                val isCompleted = appt.status == "COMPLETED"
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = when {
-                            isCompleted -> EmeraldBg
-                            appt.isCritical -> AmberBg
-                            else -> WhiteCard
-                        }
-                    ),
-                    shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(
-                        width = 1.dp,
-                        color = when {
-                            isCompleted -> EmeraldText.copy(alpha = 0.3f)
-                            appt.isCritical -> AlertBorder
-                            else -> LightBorder
-                        }
-                    )
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(28.dp)
-                                        .clip(CircleShape)
-                                        .background(if (appt.isCritical && !isCompleted) AmberText.copy(alpha = 0.15f) else SoftPeachPrimary),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = appt.targetWeek.toString(),
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = if (appt.isCritical && !isCompleted) AmberText else DeepBrownSecondary
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text(
-                                        text = "Tuần thai thứ ${appt.targetWeek}",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp,
-                                        color = if (isCompleted) EmeraldText else TextSlate
-                                    )
-                                    Text(
-                                        text = "Ngày khám: ${appt.scheduledDate}",
-                                        fontSize = 11.sp,
-                                        color = TextMuted
-                                    )
-                                }
-                            }
+            } else {
+                items(allAppointments) { appt ->
+                    val isCompleted = appt.status == "COMPLETED"
+                    val isCritical = appt.isCritical
 
-                            // Clean checkbox circle toggle (A11y Touch Target >= 48dp)
-                            IconButton(
-                                onClick = { viewModel.toggleAppointmentStatus(appt) },
-                                modifier = Modifier.minimumInteractiveComponentSize()
-                            ) {
-                                Icon(
-                                    imageVector = if (isCompleted) Icons.Default.CheckCircle else Icons.Default.Check,
-                                    tint = if (isCompleted) EmeraldText else TextMuted,
-                                    contentDescription = "Tích hoàn thành khám thai",
-                                    modifier = Modifier.size(24.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        if (appt.clinicName != null) {
-                            Text(
-                                text = "🏥 Phòng Khám: ${appt.clinicName}",
-                                fontSize = 12.sp,
-                                color = if (isCompleted) EmeraldText.copy(alpha = 0.8f) else TextSlate
-                            )
-                        }
-                        if (appt.doctorName != null) {
-                            Text(
-                                text = "🧑‍⚕️ Bác sĩ: ${appt.doctorName}",
-                                fontSize = 12.sp,
-                                color = if (isCompleted) EmeraldText.copy(alpha = 0.8f) else TextSlate
-                            )
-                        }
-                        if (appt.medicalNotes != null) {
-                            Text(
-                                text = "📝 Chỉ định dặn: \"${appt.medicalNotes}\"",
-                                fontSize = 12.sp,
-                                color = if (isCompleted) EmeraldText.copy(alpha = 0.6f) else TextMuted
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Row(
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            // Status Badge
-                            Card(
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (isCompleted) EmeraldText.copy(alpha = 0.1f) else AmberBg
-                                )
-                            ) {
-                                Text(
-                                    text = if (isCompleted) "✓ ĐÃ KHÁM SẢN" else "⚡ CHỜ HẸN KHÁM",
-                                    fontSize = 10.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                    color = if (isCompleted) EmeraldText else AmberText
-                                )
-                            }
-
-                            // Actions row
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(
+                            width = if (isCritical && !isCompleted) 1.5.dp else 1.dp,
+                            color = if (isCompleted) EmeraldText.copy(alpha = 0.3f)
+                            else if (isCritical) AlertBorder
+                            else LightBorder
+                        ),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isCompleted) EmeraldBg.copy(alpha = 0.3f)
+                            else if (isCritical) WarmPeachCard.copy(alpha = 0.8f)
+                            else WhiteCard
+                        )
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            // Header Row
                             Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                // Test notification button
-                                val context = LocalContext.current
-                                IconButton(
-                                    onClick = {
-                                        val clinicInfo = appt.clinicName ?: "phòng khám"
-                                        val docInfo = if (appt.doctorName != null) " cùng Bác sĩ ${appt.doctorName}" else ""
-                                        PregnancyNotifier.sendNotificationImmediately(
-                                            context = context,
-                                            title = "📅 Nhắc nhở lịch khám thai Tuần ${appt.targetWeek}",
-                                            message = "Mẹ ơi! Bạn có hẹn khám thai tại $clinicInfo$docInfo vào ngày ${appt.scheduledDate}. Chúc mẹ đi khám may mắn thuận buồm xuôi gió!",
-                                            itemId = appt.id,
-                                            type = "APPOINTMENT",
-                                            targetTab = 1
-                                        )
-                                    },
-                                    modifier = Modifier.size(20.dp)
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.weight(1f)
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.Notifications,
-                                        contentDescription = "Test thông báo",
-                                        tint = DeepBrownSecondary,
-                                        modifier = Modifier.size(16.dp)
+                                        imageVector = if (isCritical) Icons.Default.Star else Icons.Default.DateRange,
+                                        contentDescription = null,
+                                        tint = if (isCompleted) EmeraldText else if (isCritical) AmberText else DeepBrownSecondary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Tuần thai ${appt.targetWeek} • Ngày ${appt.scheduledDate}",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        color = if (isCompleted) EmeraldText else DeepBrownSecondary
                                     )
                                 }
 
-                                // Edit button
+                                // Mark completed circle icon
                                 IconButton(
-                                    onClick = { editingAppointment = appt },
-                                    modifier = Modifier.size(20.dp)
+                                    onClick = { viewModel.toggleAppointmentStatus(appt) },
+                                    modifier = Modifier.minimumInteractiveComponentSize()
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.Edit,
-                                        contentDescription = "Sửa lịch trình",
-                                        tint = DeepBrownSecondary.copy(alpha = 0.8f),
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
-
-                                // Delete button
-                                IconButton(
-                                    onClick = { viewModel.deleteAppointment(appt.id) },
-                                    modifier = Modifier.size(20.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Xóa lịch trình",
-                                        tint = AlertRed.copy(alpha = 0.5f),
-                                        modifier = Modifier.size(16.dp)
+                                        imageVector = if (isCompleted) Icons.Default.CheckCircle else Icons.Default.Check,
+                                        tint = if (isCompleted) EmeraldText else TextMuted,
+                                        contentDescription = "Tích hoàn thành khám thai",
+                                        modifier = Modifier.size(24.dp)
                                     )
                                 }
                             }
+
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            if (appt.clinicName != null) {
+                                Text(
+                                    text = "🏥 Phòng Khám: ${appt.clinicName}",
+                                    fontSize = 12.sp,
+                                    color = if (isCompleted) EmeraldText.copy(alpha = 0.8f) else TextSlate
+                                )
+                            }
+                            if (appt.doctorName != null) {
+                                Text(
+                                    text = "🧑‍⚕️ Bác sĩ: ${appt.doctorName}",
+                                    fontSize = 12.sp,
+                                    color = if (isCompleted) EmeraldText.copy(alpha = 0.8f) else TextSlate
+                                )
+                            }
+                            if (appt.medicalNotes != null) {
+                                Text(
+                                    text = "📝 Chỉ định dặn: \"${appt.medicalNotes}\"",
+                                    fontSize = 12.sp,
+                                    color = if (isCompleted) EmeraldText.copy(alpha = 0.6f) else TextMuted
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Row(
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                // Status Badge
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (isCompleted) EmeraldText.copy(alpha = 0.1f) else AmberBg
+                                    )
+                                ) {
+                                    Text(
+                                        text = if (isCompleted) "✓ ĐÃ KHÁM SẢN" else "⚡ CHỜ HẸN KHÁM",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                        color = if (isCompleted) EmeraldText else AmberText
+                                    )
+                                }
+
+                                // Actions row (Edit, Delete)
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // Edit button
+                                    IconButton(
+                                        onClick = { editingAppointment = appt },
+                                        modifier = Modifier.size(20.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = "Sửa lịch trình",
+                                            tint = DeepBrownSecondary.copy(alpha = 0.8f),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+
+                                    // Delete button
+                                    IconButton(
+                                        onClick = { viewModel.deleteAppointment(appt.id) },
+                                        modifier = Modifier.size(20.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Delete,
+                                            contentDescription = "Xóa lịch trình",
+                                            tint = AlertRed.copy(alpha = 0.5f),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Circular Add Floating Action Button (+) centered bottom right
+        FloatingActionButton(
+            onClick = { showAddDialog = true },
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 20.dp, end = 20.dp)
+                .testTag("fab_add_appointment"),
+            containerColor = DeepBrownSecondary,
+            contentColor = Color.White,
+            shape = CircleShape
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = "Thêm lịch hẹn khám mới",
+                modifier = Modifier.size(24.dp)
+            )
+        }
+    }
+
+    // Add Appointment dialog popup
+    if (showAddDialog) {
+        var addClinicVal by remember { mutableStateOf("") }
+        var addDoctorVal by remember { mutableStateOf("") }
+        var addDateVal by remember { mutableStateOf("") }
+        var addNotesVal by remember { mutableStateOf("") }
+        var addWeekValStr by remember { mutableStateOf(if (selectedWeek > 0) selectedWeek.toString() else "12") }
+        var addIsCriticalVal by remember { mutableStateOf(true) }
+
+        Dialog(onDismissRequest = { showAddDialog = false }) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .testTag("add_appointment_dialog"),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = WhiteCard),
+                border = BorderStroke(1.dp, LightBorder)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(18.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "📅 Lên Lịch Hẹn Khám Thai Độc Lập",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = DeepBrownSecondary,
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    PregnancyTextField(
+                        value = addWeekValStr,
+                        onValueChange = { addWeekValStr = it },
+                        label = "Tuần thai khám (1..42)",
+                        modifier = Modifier.fillMaxWidth(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                    )
+
+                    PregnancyDatePickerField(
+                        label = "Ngày hẹn khám",
+                        currentDateYmd = addDateVal,
+                        onDateSelected = { addDateVal = it },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    PregnancyTextField(
+                        value = addClinicVal,
+                        onValueChange = { addClinicVal = it },
+                        label = "Tên phòng khám / Bệnh viện",
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    PregnancyTextField(
+                        value = addDoctorVal,
+                        onValueChange = { addDoctorVal = it },
+                        label = "Bác sĩ phụ trách chính",
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    PregnancyTextField(
+                        value = addNotesVal,
+                        onValueChange = { addNotesVal = it },
+                        label = "Ghi chú dặn dò quan trọng",
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = false,
+                        maxLines = 2
+                    )
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { addIsCriticalVal = !addIsCriticalVal }
+                            .padding(vertical = 4.dp)
+                    ) {
+                        Checkbox(
+                            checked = addIsCriticalVal,
+                            onCheckedChange = { addIsCriticalVal = it },
+                            colors = CheckboxDefaults.colors(checkedColor = DeepBrownSecondary)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Đây là mốc khám quan trọng (Mốc Vàng)",
+                            fontSize = 12.sp,
+                            color = TextSlate
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { showAddDialog = false },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, LightBorder)
+                        ) {
+                            Text("Hủy bỏ", color = TextSlate, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Button(
+                            onClick = {
+                                val w = addWeekValStr.toIntOrNull() ?: selectedWeek
+                                if (addDateVal.isNotBlank()) {
+                                    viewModel.addAppointment(
+                                        week = w,
+                                        date = addDateVal,
+                                        clinic = addClinicVal,
+                                        doctor = addDoctorVal,
+                                        notes = addNotesVal,
+                                        isCritical = addIsCriticalVal
+                                    )
+                                    showAddDialog = false
+                                    focusManager.clearFocus()
+                                }
+                            },
+                            modifier = Modifier.weight(1.3f),
+                            colors = ButtonDefaults.buttonColors(containerColor = DeepBrownSecondary),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Text("Xác Nhận", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -2489,55 +2518,6 @@ fun ProfileTab(
                                 fontStyle = FontStyle.Italic
                             )
                         }
-                    }
-                }
-            }
-
-            // Live weight notification test card
-            item {
-                val context = LocalContext.current
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            PregnancyNotifier.sendNotificationImmediately(
-                                context = context,
-                                title = "⚖️ Nhắc nhở: Cập nhật cân nặng tuần thai mới",
-                                message = "Mẹ bầu ơi! Đã tròn một tuần kể từ lần ghi nhận cân nặng trước rồi. Hãy bước lên cân bàn hôm nay và lưu chỉ số mới để bảo vệ cân đối sức khỏe thai kỳ nhé!",
-                                itemId = "WEIGHT_TRACKER",
-                                type = "WEIGHT",
-                                targetTab = 4
-                            )
-                        },
-                    colors = CardDefaults.cardColors(containerColor = SoftPeachPrimary.copy(alpha = 0.4f)),
-                    shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(1.dp, DeepBrownSecondary.copy(alpha = 0.2f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Notifications,
-                            contentDescription = null,
-                            tint = DeepBrownSecondary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "🔔 Thử nghiệm nhắc cân nặng hàng tuần",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = DeepBrownSecondary
-                            )
-                            Text(
-                                text = "Bấm để kiểm tra ngay lập tức âm thanh / rung và biểu tượng chiếc cân đo cân nặng trên thanh thông báo!",
-                                fontSize = 11.sp,
-                                color = DarkBrownText
-                            )
-                        }
-                        Text("TEST", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = DeepBrownSecondary, modifier = Modifier.padding(horizontal = 4.dp))
                     }
                 }
             }
@@ -3719,55 +3699,6 @@ fun RemindersTab(
                             color = TextSlate,
                             lineHeight = 15.sp
                         )
-                    }
-                }
-            }
-
-            // Live status bar test action card
-            item {
-                val context = LocalContext.current
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            PregnancyNotifier.sendNotificationImmediately(
-                                context = context,
-                                title = "💊 Giờ uống vi chất bổ sung thai kỳ",
-                                message = "Mẹ bầu ơi! Đã đến khung giờ bổ sung Sắt, Canxi và Acid Folic vàng rồi. Đừng quên đánh dấu tích hoàn thành ngày hôm nay nhé!",
-                                itemId = "DAILY_MOCK_REMINDER",
-                                type = "REMINDER",
-                                targetTab = 3
-                            )
-                        },
-                    colors = CardDefaults.cardColors(containerColor = EmeraldBg.copy(alpha = 0.25f)),
-                    shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(1.dp, EmeraldText.copy(alpha = 0.3f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Notifications,
-                            contentDescription = null,
-                            tint = EmeraldText,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "🔔 Thử nghiệm chu báo uống vi chất / ăn uống",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = EmeraldText
-                            )
-                            Text(
-                                text = "Bấm vào card này để test thử hiển thị thông báo uống vi chất lập tức trên điện thoại của mẹ!",
-                                fontSize = 11.sp,
-                                color = DarkBrownText
-                            )
-                        }
-                        Text("TEST", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EmeraldText, modifier = Modifier.padding(horizontal = 4.dp))
                     }
                 }
             }
