@@ -10,6 +10,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -214,6 +216,22 @@ fun PregnancyApp() {
         }
     }
 
+    val pagerState = rememberPagerState(initialPage = currentTab) { 5 }
+
+    // Sync viewModel tab change to pager state
+    LaunchedEffect(currentTab) {
+        if (pagerState.currentPage != currentTab) {
+            pagerState.animateScrollToPage(currentTab)
+        }
+    }
+
+    // Sync pager state swipe to viewModel
+    LaunchedEffect(pagerState.currentPage) {
+        if (pagerState.currentPage != currentTab) {
+            viewModel.changeTab(pagerState.currentPage)
+        }
+    }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         contentWindowInsets = WindowInsets.safeDrawing,
@@ -298,12 +316,17 @@ fun PregnancyApp() {
                 HorizontalDivider(color = LightBorder, thickness = 1.dp)
             }
 
-            // Dynamic Tab Views
-            Box(modifier = Modifier.weight(1f)) {
-                if (selectedWeekNum == -1 && (currentTab == 0 || currentTab == 2)) {
+            // Dynamic Tab Views with Swipe-to-change feel using HorizontalPager
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .weight(1f)
+            ) { page ->
+                if (selectedWeekNum == -1 && (page == 0 || page == 2)) {
                     SetupDatesGreetingCard(onSetupClick = { viewModel.changeTab(4) })
                 } else {
-                    when (currentTab) {
+                    when (page) {
                         0 -> TodayTab(
                             weekData = currentWeekData,
                             userTheme = activeUser.visualizationTheme,
