@@ -15,12 +15,14 @@ class PregnancyRepository(private val database: AppDatabase) {
     private val appointmentDao = database.appointmentDao()
     private val medicationReminderDao = database.medicationReminderDao()
     private val weightRecordDao = database.weightRecordDao()
+    private val reminderLogDao = database.reminderLogDao()
 
     val currentUserFlow: Flow<UserEntity?> = userDao.getUserFlow()
     val allWeeksFlow: Flow<List<FetalWeekEntity>> = fetalWeekDao.getAllWeeksFlow()
     val allAppointmentsFlow: Flow<List<AppointmentEntity>> = appointmentDao.getAllAppointmentsFlow()
     val allRemindersFlow: Flow<List<MedicationReminderEntity>> = medicationReminderDao.getAllRemindersFlow()
     val allWeightRecordsFlow: Flow<List<WeightRecordEntity>> = weightRecordDao.getAllWeightRecordsFlow()
+    val allLogsFlow: Flow<List<ReminderLogEntity>> = reminderLogDao.getAllLogsFlow()
 
     fun getWeekFlow(week: Int): Flow<FetalWeekEntity?> = fetalWeekDao.getWeekFlow(week)
 
@@ -53,6 +55,19 @@ class PregnancyRepository(private val database: AppDatabase) {
 
     suspend fun deleteReminder(id: String) {
         medicationReminderDao.deleteById(id)
+        reminderLogDao.deleteLogsForReminder(id)
+    }
+
+    suspend fun saveReminderLog(log: ReminderLogEntity) {
+        reminderLogDao.insertOrUpdate(log)
+    }
+
+    suspend fun deleteReminderLog(reminderId: String, date: String) {
+        reminderLogDao.deleteLogForReminderAndDate(reminderId, date)
+    }
+
+    suspend fun getLogForReminderAndDate(reminderId: String, date: String): ReminderLogEntity? {
+        return reminderLogDao.getLogForReminderAndDate(reminderId, date)
     }
 
     suspend fun seedDatabaseIfNeeded() {

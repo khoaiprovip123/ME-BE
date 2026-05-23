@@ -1859,122 +1859,244 @@ fun TypeSelectorButton(
 @Composable
 fun ReminderScheduleCard(
     reminder: MedicationReminderEntity,
-    todayStr: String,
+    todayLog: ReminderLogEntity?,
     viewModel: PregnancyViewModel,
     activeColor: Color,
-    checkedBgColor: Color,
-    checkedTxtColor: Color,
     onEditClick: () -> Unit
 ) {
-    val isTakenToday = reminder.lastTakenDate == todayStr
+    val isTaken = todayLog?.status == "TAKEN"
+    val isRejected = todayLog?.status == "REJECTED"
+
+    val bgColor = when {
+        isTaken -> EmeraldBg
+        isRejected -> AlertLightBg
+        else -> WhiteCard
+    }
+
+    val borderColor = when {
+        isTaken -> EmeraldText.copy(alpha = 0.3f)
+        isRejected -> AlertRed.copy(alpha = 0.3f)
+        else -> LightBorder
+    }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isTakenToday) checkedBgColor else WhiteCard
-        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("reminder_item_${reminder.id}"),
+        colors = CardDefaults.cardColors(containerColor = bgColor),
         shape = RoundedCornerShape(14.dp),
-        border = BorderStroke(1.dp, if (isTakenToday) checkedTxtColor.copy(alpha = 0.3f) else LightBorder)
+        border = BorderStroke(1.dp, borderColor)
     ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            // Accessible Tap-to-Complete Checkbox Area (Touch Target >= 48.dp)
-            Box(
-                modifier = Modifier
-                    .minimumInteractiveComponentSize()
-                    .clickable { viewModel.toggleReminderTakenToday(reminder) }
-                    .padding(end = 8.dp),
-                contentAlignment = Alignment.Center
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Icon(
-                    imageVector = if (isTakenToday) Icons.Default.CheckCircle else Icons.Default.Check,
-                    contentDescription = if (isTakenToday) "Đã hoàn thành" else "Chưa hoàn thành",
-                    tint = if (isTakenToday) checkedTxtColor else TextMuted,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            Column(modifier = Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(6.dp))
-                            .background(if (isTakenToday) checkedTxtColor.copy(alpha = 0.15f) else activeColor)
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(if (isTaken) EmeraldText.copy(alpha = 0.15f) else activeColor)
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = reminder.scheduledTime,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isTaken) EmeraldText else DeepBrownSecondary
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = reminder.scheduledTime,
-                            fontSize = 11.sp,
+                            text = when {
+                                isTaken -> "ĐÃ DÙNG"
+                                isRejected -> "ĐÃ BỎ QUA"
+                                else -> "HÀNG NGÀY"
+                            },
+                            fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
-                            color = if (isTakenToday) checkedTxtColor else DeepBrownSecondary
+                            color = when {
+                                isTaken -> EmeraldText
+                                isRejected -> AlertRed
+                                else -> TextMuted
+                            },
+                            letterSpacing = 0.5.sp
                         )
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = if (isTakenToday) "ĐÃ HOÀN THÀNH" else "HẰNG NGÀY",
-                        fontSize = 9.sp,
+                        text = reminder.medicationName,
                         fontWeight = FontWeight.Bold,
-                        color = if (isTakenToday) checkedTxtColor else TextMuted,
-                        letterSpacing = 0.5.sp
+                        fontSize = 14.sp,
+                        color = if (isTaken) TextSlate.copy(alpha = 0.55f) else TextSlate,
+                        textDecoration = if (isTaken) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
+                    )
+                    Text(
+                        text = reminder.dosage,
+                        fontSize = 12.sp,
+                        color = if (isTaken) TextMuted.copy(alpha = 0.65f) else TextMuted
                     )
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = reminder.medicationName,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    color = if (isTakenToday) TextSlate.copy(alpha = 0.55f) else TextSlate,
-                    textDecoration = if (isTakenToday) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
-                )
-                Text(
-                    text = reminder.dosage,
-                    fontSize = 12.sp,
-                    color = if (isTakenToday) TextMuted.copy(alpha = 0.65f) else TextMuted
-                )
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Active Switch only visible when pending
+                    if (!isTaken && !isRejected) {
+                        Switch(
+                            checked = reminder.isActive,
+                            onCheckedChange = { viewModel.toggleReminderActive(reminder) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = DeepBrownSecondary,
+                                checkedTrackColor = SoftPeachPrimary
+                            )
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                    }
+
+                    // Edit Button (only visible when not logged yet)
+                    if (!isTaken && !isRejected) {
+                        IconButton(
+                            onClick = { onEditClick() },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Chỉnh sửa nhắc nhở",
+                                tint = DeepBrownSecondary.copy(alpha = 0.8f),
+                                modifier = Modifier.size(17.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(2.dp))
+                    }
+
+                    // Delete Button
+                    IconButton(
+                        onClick = { viewModel.deleteReminder(reminder.id) },
+                        modifier = Modifier.size(36.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Xóa nhắc nhở",
+                            tint = AlertRed.copy(alpha = 0.6f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
             }
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // Active Switch
-                Switch(
-                    checked = reminder.isActive,
-                    onCheckedChange = { viewModel.toggleReminderActive(reminder) },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = DeepBrownSecondary,
-                        checkedTrackColor = SoftPeachPrimary
-                    )
-                )
-
-                Spacer(modifier = Modifier.width(4.dp))
-
-                // Edit Button
-                IconButton(
-                    onClick = { onEditClick() },
-                    modifier = Modifier.size(36.dp)
+            // Bottom Actions depending on taken / rejected log today
+            Spacer(modifier = Modifier.height(10.dp))
+            if (isTaken || isRejected) {
+                // Show Undo/Restore button row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = "Chỉnh sửa nhắc nhở",
-                        tint = DeepBrownSecondary.copy(alpha = 0.8f),
-                        modifier = Modifier.size(17.dp)
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = if (isTaken) Icons.Default.CheckCircle else Icons.Default.Close,
+                            contentDescription = null,
+                            tint = if (isTaken) EmeraldText else AlertRed,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (isTaken) "Mẹ yêu đã hoàn thành lịch nhắc! 🥰" else "Mẹ bỏ qua lịch nhắc hôm nay.",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = if (isTaken) EmeraldText else AlertRed
+                        )
+                    }
+
+                    TextButton(
+                        onClick = { viewModel.undoReminderAction(reminder) },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        modifier = Modifier.height(32.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Hoàn tác",
+                                tint = DeepBrownSecondary,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Hoàn tác",
+                                fontSize = 11.sp,
+                                color = DeepBrownSecondary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
-
-                Spacer(modifier = Modifier.width(2.dp))
-
-                // Delete Button
-                IconButton(
-                    onClick = { viewModel.deleteReminder(reminder.id) },
-                    modifier = Modifier.size(36.dp)
+            } else {
+                // Show Confirm vs Reject action buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Xóa nhắc nhở",
-                        tint = AlertRed.copy(alpha = 0.6f),
-                        modifier = Modifier.size(18.dp)
-                    )
+                    Button(
+                        onClick = { viewModel.logReminderAction(reminder, "TAKEN") },
+                        colors = ButtonDefaults.buttonColors(containerColor = EmeraldBg),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, EmeraldText.copy(alpha = 0.3f)),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(40.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                tint = EmeraldText,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Đã dùng 👍",
+                                color = EmeraldText,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = { viewModel.logReminderAction(reminder, "REJECTED") },
+                        colors = ButtonDefaults.outlinedButtonColors(containerColor = AlertLightBg.copy(alpha = 0.5f)),
+                        shape = RoundedCornerShape(10.dp),
+                        border = BorderStroke(1.dp, AlertRed.copy(alpha = 0.2f)),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(40.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = null,
+                                tint = AlertRed,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Bỏ qua ❌",
+                                color = AlertRed,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -3082,23 +3204,197 @@ fun RemindersTab(
     allReminders: List<MedicationReminderEntity>
 ) {
     val focusManager = LocalFocusManager.current
-    var medName by remember { mutableStateOf("") }
-    var dosage by remember { mutableStateOf("") }
-    var timeStr by remember { mutableStateOf("08:00") }
-    var reminderType by remember { mutableStateOf("MEDICINE") } // MEDICINE or DIET
-    var repeatFrequency by remember { mutableStateOf("Hàng ngày") }
+    val allLogs by viewModel.allLogsState.collectAsStateWithLifecycle()
 
+    var showAddDialog by remember { mutableStateOf(false) }
     var editingReminder by remember { mutableStateOf<MedicationReminderEntity?>(null) }
 
     val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
     val medicineReminders = allReminders.filter { it.type == "MEDICINE" }
     val dietReminders = allReminders.filter { it.type == "DIET" }
 
+    // STATISTICS CALCULATION FOR QUICK COMPLIANCE DASHBOARD
+    val calendar = Calendar.getInstance()
+    val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+
+    val past7Days = (0..6).map { i ->
+        val cal = calendar.clone() as Calendar
+        cal.add(Calendar.DAY_OF_YEAR, -i)
+        sdf.format(cal.time)
+    }
+
+    val past30Days = (0..29).map { i ->
+        val cal = calendar.clone() as Calendar
+        cal.add(Calendar.DAY_OF_YEAR, -i)
+        sdf.format(cal.time)
+    }
+
+    val logs7 = allLogs.filter { it.date in past7Days }
+    val taken7 = logs7.count { it.status == "TAKEN" }
+    val rejected7 = logs7.count { it.status == "REJECTED" }
+    val total7 = taken7 + rejected7
+    val complianceRate7 = if (total7 > 0) (taken7 * 100) / total7 else 100
+
+    val logs30 = allLogs.filter { it.date in past30Days }
+    val taken30 = logs30.count { it.status == "TAKEN" }
+    val rejected30 = logs30.count { it.status == "REJECTED" }
+    val total30 = taken30 + rejected30
+    val complianceRate30 = if (total30 > 0) (taken30 * 100) / total30 else 100
+
+    // Popup dialog for ADDING a reminder
+    if (showAddDialog) {
+        var addName by remember { mutableStateOf("") }
+        var addDosage by remember { mutableStateOf("") }
+        var addTimeStr by remember { mutableStateOf("08:00") }
+        var addType by remember { mutableStateOf("MEDICINE") }
+        var addFreq by remember { mutableStateOf("Hàng ngày") }
+
+        Dialog(onDismissRequest = { showAddDialog = false }) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = WhiteCard),
+                border = BorderStroke(1.dp, LightBorder)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(18.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        text = "⏰ Lên Lịch Nhắc Cố Định",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = DeepBrownSecondary,
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TypeSelectorButton(
+                            text = "Vi Chất / Thuốc",
+                            emoji = "💊",
+                            isActive = addType == "MEDICINE",
+                            onClick = { addType = "MEDICINE" },
+                            modifier = Modifier.weight(1f)
+                        )
+                        TypeSelectorButton(
+                            text = "Dinh Dưỡng",
+                            emoji = "🍎",
+                            isActive = addType == "DIET",
+                            onClick = { addType = "DIET" },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+
+                    PregnancyTextField(
+                        value = addName,
+                        onValueChange = { addName = it },
+                        label = if (addType == "MEDICINE") "Tên thuốc / vi chất" else "Món ăn bồi bổ",
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    PregnancyTextField(
+                        value = addDosage,
+                        onValueChange = { addDosage = it },
+                        label = "Liều lượng / cách dùng",
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    PregnancyTimePickerField(
+                        label = "Giờ nhắc nở",
+                        currentTimeHm = addTimeStr,
+                        onTimeSelected = { addTimeStr = it },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Text(
+                        text = "📅 Chu kỳ lặp cố định",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = DeepBrownSecondary
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        listOf(
+                            "Hàng ngày",
+                            "Thứ 2-4-6",
+                            "Thứ 3-5-7",
+                            "Cuối tuần (T7, CN)",
+                            "Mỗi 2 ngày"
+                        ).forEach { freq ->
+                            val isSel = addFreq == freq
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(if (isSel) DeepBrownSecondary else WarmBackground)
+                                    .border(1.dp, if (isSel) DeepBrownSecondary else LightBorder, RoundedCornerShape(8.dp))
+                                    .clickable { addFreq = freq }
+                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Text(
+                                    text = freq,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isSel) Color.White else TextSlate
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { showAddDialog = false },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(10.dp),
+                            border = BorderStroke(1.dp, LightBorder)
+                        ) {
+                            Text("Hủy bỏ", color = TextSlate, fontWeight = FontWeight.Bold)
+                        }
+
+                        LiquidGlassButton(
+                            onClick = {
+                                if (addName.isNotBlank() && addDosage.isNotBlank()) {
+                                    viewModel.addReminder(
+                                        name = addName,
+                                        dosage = "$addDosage (Lặp: $addFreq)",
+                                        time = addTimeStr,
+                                        type = addType
+                                    )
+                                    showAddDialog = false
+                                    focusManager.clearFocus()
+                                }
+                            },
+                            modifier = Modifier.weight(1.3f)
+                        ) {
+                            Text("Kích Hoạt", color = Color.White, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     // Dialog editing reminder details
     if (editingReminder != null) {
         val reminderToEdit = editingReminder!!
         var editName by remember(reminderToEdit) { mutableStateOf(reminderToEdit.medicationName) }
-        
+
         // Extract base dosage if it contains " (Lặp: "
         val baseDosageInit = if (reminderToEdit.dosage.contains(" (Lặp: ")) {
             reminderToEdit.dosage.substringBefore(" (Lặp: ")
@@ -3110,7 +3406,7 @@ fun RemindersTab(
         } else {
             "Hàng ngày"
         }
-        
+
         var editDosage by remember(reminderToEdit) { mutableStateOf(baseDosageInit) }
         var editTimeStr by remember(reminderToEdit) { mutableStateOf(reminderToEdit.scheduledTime) }
         var editType by remember(reminderToEdit) { mutableStateOf(reminderToEdit.type) }
@@ -3138,8 +3434,7 @@ fun RemindersTab(
                         color = DeepBrownSecondary,
                         modifier = Modifier.align(Alignment.CenterHorizontally)
                     )
-                    
-                    // Type selector
+
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -3194,10 +3489,10 @@ fun RemindersTab(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         listOf(
-                            "Hàng ngày", 
-                            "Thứ 2-4-6", 
-                            "Thứ 3-5-7", 
-                            "Cuối tuần (T7, CN)", 
+                            "Hàng ngày",
+                            "Thứ 2-4-6",
+                            "Thứ 3-5-7",
+                            "Cuối tuần (T7, CN)",
                             "Mỗi 2 ngày"
                         ).forEach { freq ->
                             val isSel = editFreq == freq
@@ -3258,306 +3553,322 @@ fun RemindersTab(
         }
     }
 
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-        contentPadding = PaddingValues(bottom = 24.dp, top = 10.dp)
-    ) {
-        // Doze mode advice notice
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = WhiteCard),
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, LightBorder)
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+    Box(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(bottom = 86.dp, top = 10.dp)
+        ) {
+            // COMPACT COMPLIANCE DASHBOARD CARD FOR ACCURATE INSIGHTS
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = WarmPeachCard),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, SoftPeachPrimary)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Warning,
-                        contentDescription = "Tránh trễ báo thức",
-                        tint = DeepBrownSecondary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text(
-                        text = "Để ứng dụng nhắc nhở chính xác không bị chế độ tối ưu pin (Doze Mode) của hệ điều hành tắt âm, mẹ bầu vui lòng mở: Cài đặt -> Pin -> Tắt tối ưu hóa pin cho ứng dụng này.",
-                        fontSize = 10.5.sp,
-                        color = TextSlate,
-                        lineHeight = 15.sp
-                    )
-                }
-            }
-        }
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Star,
+                                contentDescription = null,
+                                tint = DeepBrownSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "📊 BÁO CÁO TUÂN THỦ LỊCH NHẮC",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = DeepBrownSecondary,
+                                letterSpacing = 0.5.sp
+                            )
+                        }
 
-        // Live status bar test action card
-        item {
-            val context = LocalContext.current
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable {
-                        PregnancyNotifier.sendNotificationImmediately(
-                            context = context,
-                            title = "💊 Giờ uống vi chất bổ sung thai kỳ",
-                            message = "Mẹ bầu ơi! Đã đến khung giờ bổ sung Sắt, Canxi và Acid Folic vàng rồi. Đừng quên đánh dấu tích hoàn thành ngày hôm nay nhé!",
-                            itemId = "DAILY_MOCK_REMINDER",
-                            type = "REMINDER",
-                            targetTab = 3
-                        )
-                    },
-                colors = CardDefaults.cardColors(containerColor = EmeraldBg.copy(alpha = 0.25f)),
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, EmeraldText.copy(alpha = 0.3f))
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Notifications,
-                        contentDescription = null,
-                        tint = EmeraldText,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "🔔 Thử nghiệm chu báo uống vi chất / ăn uống",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = EmeraldText
-                        )
-                        Text(
-                            text = "Bấm vào card này để test thử hiển thị thông báo uống vi chất lập tức trên điện thoại của mẹ!",
-                            fontSize = 11.sp,
-                            color = DarkBrownText
-                        )
-                    }
-                    Text("TEST", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EmeraldText, modifier = Modifier.padding(horizontal = 4.dp))
-                }
-            }
-        }
+                        Spacer(modifier = Modifier.height(14.dp))
 
-        // Medication & Diet Reminder Form
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = WhiteCard),
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, LightBorder)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = "⏰ Lên Lịch Nhắc Ngày Cố Định",
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = DeepBrownSecondary
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Type Selector Buttons (Custom theme-guided design)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        TypeSelectorButton(
-                            text = "Báo Vi Chất / Thuốc",
-                            emoji = "💊",
-                            isActive = reminderType == "MEDICINE",
-                            onClick = { reminderType = "MEDICINE" },
-                            modifier = Modifier.weight(1f)
-                        )
-                        TypeSelectorButton(
-                            text = "Bữa Ăn / Dinh Dưỡng",
-                            emoji = "🍎",
-                            isActive = reminderType == "DIET",
-                            onClick = { reminderType = "DIET" },
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    PregnancyTextField(
-                        value = medName,
-                        onValueChange = { medName = it },
-                        label = if (reminderType == "MEDICINE") "Tên thuốc / vi chất bổ sung" else "Món ăn / thức uống bồi bổ",
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    PregnancyTextField(
-                        value = dosage,
-                        onValueChange = { dosage = it },
-                        label = if (reminderType == "MEDICINE") "Liều lượng chỉ định (Ví dụ: 1 viên, 5ml)" else "Chú thích bồi dưỡng (Ví dụ: 1 ly ấm, nhai 1 vốc)",
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    PregnancyTimePickerField(
-                        label = "Khung giờ nhắc",
-                        currentTimeHm = timeStr,
-                        onTimeSelected = { timeStr = it },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Customized schedule selection
-                    Text(
-                        text = "📅 Chu kỳ lặp nhắc nhở tự chọn",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = DeepBrownSecondary
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        listOf(
-                            "Hàng ngày", 
-                            "Thứ 2-4-6", 
-                            "Thứ 3-5-7", 
-                            "Cuối tuần (T7, CN)", 
-                            "Mỗi 2 ngày"
-                        ).forEach { freq ->
-                            val isSel = repeatFrequency == freq
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isSel) DeepBrownSecondary else WarmBackground)
-                                    .border(1.dp, if (isSel) DeepBrownSecondary else LightBorder, RoundedCornerShape(8.dp))
-                                    .clickable { repeatFrequency = freq }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp)
-                            ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            // Weekly Report
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = freq,
-                                    fontSize = 11.sp,
+                                    text = "Tuần này (7 ngày)",
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (isSel) Color.White else TextSlate
+                                    color = TextSlate
+                                )
+                                Row(
+                                    verticalAlignment = Alignment.Bottom,
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "$complianceRate7%",
+                                        fontSize = 24.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = if (complianceRate7 >= 80) EmeraldText else AlertRed
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "tỉ lệ",
+                                        fontSize = 11.sp,
+                                        color = TextMuted,
+                                        modifier = Modifier.padding(bottom = 4.dp)
+                                    )
+                                }
+                                LinearProgressIndicator(
+                                    progress = { complianceRate7 / 100f },
+                                    modifier = Modifier
+                                        .fillMaxWidth(0.9f)
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
+                                    color = if (complianceRate7 >= 80) EmeraldText else AlertRed,
+                                    trackColor = WarmBackground
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "👍 Đúng giờ: $taken7  •  ❌ Bỏ qua: $rejected7",
+                                    fontSize = 10.sp,
+                                    color = TextMuted
+                                )
+                            }
+
+                            // Monthly Report
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Tháng này (30 ngày)",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextSlate
+                                )
+                                Row(
+                                    verticalAlignment = Alignment.Bottom,
+                                    modifier = Modifier.padding(vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "$complianceRate30%",
+                                        fontSize = 24.sp,
+                                        fontWeight = FontWeight.Black,
+                                        color = if (complianceRate30 >= 80) EmeraldText else AlertRed
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "tỉ lệ",
+                                        fontSize = 11.sp,
+                                        color = TextMuted,
+                                        modifier = Modifier.padding(bottom = 4.dp)
+                                    )
+                                }
+                                LinearProgressIndicator(
+                                    progress = { complianceRate30 / 100f },
+                                    modifier = Modifier
+                                        .fillMaxWidth(0.9f)
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
+                                    color = if (complianceRate30 >= 80) EmeraldText else AlertRed,
+                                    trackColor = WarmBackground
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "👍 Đúng giờ: $taken30  •  ❌ Bỏ qua: $rejected30",
+                                    fontSize = 10.sp,
+                                    color = TextMuted
                                 )
                             }
                         }
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
 
-                    LiquidGlassButton(
-                        onClick = {
-                            if (medName.isNotBlank() && dosage.isNotBlank()) {
-                                viewModel.addReminder(
-                                    name = medName, 
-                                    dosage = "$dosage (Lặp: $repeatFrequency)", 
-                                    time = timeStr, 
-                                    type = reminderType
-                                )
-                                medName = ""
-                                dosage = ""
-                                repeatFrequency = "Hàng ngày"
-                                focusManager.clearFocus()
-                            }
-                        },
-                        modifier = Modifier
-                            .testTag("add_reminder_btn")
-                            .fillMaxWidth()
-                    ) {
-                        Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = Color.White)
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
+                        HorizontalDivider(color = LightBorder, thickness = 0.5.dp)
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = if (reminderType == "MEDICINE") "Kích Hoạt Nhắc Vi Chất" else "Nhắc Chế Độ Dinh Dưỡng",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
+                            text = "💡 Hệ thống tự động reset trạng thái nhắc nhở mỗi ngày mới nhằm đảm bảo thông tin uống thuốc / ăn uống bổ sung luôn tươi mới! 🥰",
+                            fontSize = 10.sp,
+                            color = DarkBrownText,
+                            lineHeight = 14.sp,
+                            fontStyle = FontStyle.Italic
                         )
                     }
                 }
             }
-        }
 
-        // 1. Group MEDICINE Reminders
-        item {
-            Text(
-                text = "💊 Trình Nhắc Vi Chất & Thuốc Hôm Nay (Tích hoàn thành)",
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                color = DeepBrownSecondary
-            )
-        }
-
-        if (medicineReminders.isEmpty()) {
+            // Doze mode advice notice
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = WhiteCard),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(14.dp),
                     border = BorderStroke(1.dp, LightBorder)
                 ) {
-                    Text(
-                        text = "Chưa có trình nhắc vi chất nào hoạt động hôm nay.",
-                        color = TextMuted,
-                        fontSize = 12.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(16.dp)
-                    )
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = "Tránh trễ báo thức",
+                            tint = DeepBrownSecondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Để ứng dụng nhắc nhở chính xác không bị chế độ tối ưu pin (Doze Mode) của hệ điều hành tắt âm, mẹ bầu vui lòng mở: Cài đặt -> Pin -> Tắt tối ưu hóa pin cho ứng dụng này.",
+                            fontSize = 10.5.sp,
+                            color = TextSlate,
+                            lineHeight = 15.sp
+                        )
+                    }
                 }
             }
-        } else {
-            items(medicineReminders) { reminder ->
-                ReminderScheduleCard(
-                    reminder = reminder,
-                    todayStr = todayStr,
-                    viewModel = viewModel,
-                    activeColor = SoftPeachPrimary,
-                    checkedBgColor = EmeraldBg,
-                    checkedTxtColor = EmeraldText,
-                    onEditClick = { editingReminder = reminder }
-                )
-            }
-        }
 
-        // 2. Group DIET Reminders
-        item {
-            Text(
-                text = "🍎 Chế Độ Ăn Dinh Dưỡng & Bữa Phụ (Tích hoàn thành)",
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                color = DeepBrownSecondary
-            )
-        }
-
-        if (dietReminders.isEmpty()) {
+            // Live status bar test action card
             item {
+                val context = LocalContext.current
                 Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = WhiteCard),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, LightBorder)
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            PregnancyNotifier.sendNotificationImmediately(
+                                context = context,
+                                title = "💊 Giờ uống vi chất bổ sung thai kỳ",
+                                message = "Mẹ bầu ơi! Đã đến khung giờ bổ sung Sắt, Canxi và Acid Folic vàng rồi. Đừng quên đánh dấu tích hoàn thành ngày hôm nay nhé!",
+                                itemId = "DAILY_MOCK_REMINDER",
+                                type = "REMINDER",
+                                targetTab = 3
+                            )
+                        },
+                    colors = CardDefaults.cardColors(containerColor = EmeraldBg.copy(alpha = 0.25f)),
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, EmeraldText.copy(alpha = 0.3f))
                 ) {
-                    Text(
-                        text = "Chưa có chế độ ăn uống bồi bổ nhắc nhở nào hoạt động.",
-                        color = TextMuted,
-                        fontSize = 12.sp,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(16.dp)
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = null,
+                            tint = EmeraldText,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "🔔 Thử nghiệm chu báo uống vi chất / ăn uống",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = EmeraldText
+                            )
+                            Text(
+                                text = "Bấm vào card này để test thử hiển thị thông báo uống vi chất lập tức trên điện thoại của mẹ!",
+                                fontSize = 11.sp,
+                                color = DarkBrownText
+                            )
+                        }
+                        Text("TEST", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = EmeraldText, modifier = Modifier.padding(horizontal = 4.dp))
+                    }
+                }
+            }
+
+            // 1. Group MEDICINE Reminders
+            item {
+                Text(
+                    text = "💊 Trình Nhắc Vi Chất & Thuốc Hôm Nay (Nhấn xác nhận)",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = DeepBrownSecondary
+                )
+            }
+
+            if (medicineReminders.isEmpty()) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = WhiteCard),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, LightBorder)
+                    ) {
+                        Text(
+                            text = "Chưa có trình nhắc vi chất nào hoạt động hôm nay.",
+                            color = TextMuted,
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
+                }
+            } else {
+                items(medicineReminders) { reminder ->
+                    val todayLog = allLogs.find { it.reminderId == reminder.id && it.date == todayStr }
+                    ReminderScheduleCard(
+                        reminder = reminder,
+                        todayLog = todayLog,
+                        viewModel = viewModel,
+                        activeColor = SoftPeachPrimary,
+                        onEditClick = { editingReminder = reminder }
                     )
                 }
             }
-        } else {
-            items(dietReminders) { reminder ->
-                ReminderScheduleCard(
-                    reminder = reminder,
-                    todayStr = todayStr,
-                    viewModel = viewModel,
-                    activeColor = AmberBg,
-                    checkedBgColor = EmeraldBg,
-                    checkedTxtColor = EmeraldText,
-                    onEditClick = { editingReminder = reminder }
+
+            // 2. Group DIET Reminders
+            item {
+                Text(
+                    text = "🍎 Chế Độ Ăn Dinh Dưỡng & Bữa Phụ (Nhấn xác nhận)",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = DeepBrownSecondary
                 )
             }
+
+            if (dietReminders.isEmpty()) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = WhiteCard),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(1.dp, LightBorder)
+                    ) {
+                        Text(
+                            text = "Chưa có chế độ ăn uống bồi bổ nhắc nhở nào hoạt động.",
+                            color = TextMuted,
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(16.dp)
+                        )
+                    }
+                }
+            } else {
+                items(dietReminders) { reminder ->
+                    val todayLog = allLogs.find { it.reminderId == reminder.id && it.date == todayStr }
+                    ReminderScheduleCard(
+                        reminder = reminder,
+                        todayLog = todayLog,
+                        viewModel = viewModel,
+                        activeColor = AmberBg,
+                        onEditClick = { editingReminder = reminder }
+                    )
+                }
+            }
+        }
+
+        // Floating Action Button (FAB) for adding new fixed day reminders
+        FloatingActionButton(
+            onClick = { showAddDialog = true },
+            containerColor = DeepBrownSecondary,
+            contentColor = Color.White,
+            shape = CircleShape,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(bottom = 16.dp, end = 16.dp)
+                .testTag("fab_add_reminder")
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = "Thêm lịch nhắc mới",
+                modifier = Modifier.size(28.dp)
+            )
         }
     }
 }

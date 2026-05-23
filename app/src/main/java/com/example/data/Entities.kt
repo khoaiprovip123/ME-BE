@@ -60,6 +60,17 @@ data class MedicationReminderEntity(
     val dosage: String,
     val scheduledTime: String, // HH:mm
     val isActive: Boolean = true,
-    val lastTakenDate: String? = null, // To prevent double intake in the same day
+    val lastTakenDate: String? = null, // To prevent double intake in the same day (legacy, also backed up by logs)
     val type: String = "MEDICINE" // MEDICINE or DIET
 )
+
+@Entity(tableName = "reminder_logs")
+data class ReminderLogEntity(
+    @PrimaryKey val id: String = UUID.randomUUID().toString(),
+    val reminderId: String,
+    val date: String, // yyyy-MM-dd
+    val status: String, // TAKEN or REJECTED
+    val medicationName: String,
+    val type: String // MEDICINE or DIET
+)
+

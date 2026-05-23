@@ -91,15 +91,37 @@ interface WeightRecordDao {
     suspend fun countWeightRecords(): Int
 }
 
+@Dao
+interface ReminderLogDao {
+    @Query("SELECT * FROM reminder_logs ORDER BY date DESC")
+    fun getAllLogsFlow(): Flow<List<ReminderLogEntity>>
+
+    @Query("SELECT * FROM reminder_logs WHERE date = :date")
+    suspend fun getLogsByDate(date: String): List<ReminderLogEntity>
+
+    @Query("SELECT * FROM reminder_logs WHERE reminderId = :reminderId AND date = :date LIMIT 1")
+    suspend fun getLogForReminderAndDate(reminderId: String, date: String): ReminderLogEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdate(log: ReminderLogEntity)
+
+    @Query("DELETE FROM reminder_logs WHERE reminderId = :reminderId AND date = :date")
+    suspend fun deleteLogForReminderAndDate(reminderId: String, date: String)
+
+    @Query("DELETE FROM reminder_logs WHERE reminderId = :reminderId")
+    suspend fun deleteLogsForReminder(reminderId: String)
+}
+
 @Database(
     entities = [
         UserEntity::class,
         FetalWeekEntity::class,
         AppointmentEntity::class,
         MedicationReminderEntity::class,
-        WeightRecordEntity::class
+        WeightRecordEntity::class,
+        ReminderLogEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -108,6 +130,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun appointmentDao(): AppointmentDao
     abstract fun medicationReminderDao(): MedicationReminderDao
     abstract fun weightRecordDao(): WeightRecordDao
+    abstract fun reminderLogDao(): ReminderLogDao
 
     companion object {
         @Volatile

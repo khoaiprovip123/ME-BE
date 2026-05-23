@@ -66,6 +66,15 @@ class PregnancyViewModel(application: Application) : AndroidViewModel(applicatio
             initialValue = emptyList()
         )
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val allLogsState: StateFlow<List<ReminderLogEntity>> = repositoryState
+        .flatMapLatest { repo -> repo?.allLogsFlow ?: flowOf(emptyList()) }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
+
     val selectedWeek = MutableStateFlow(24) // Default to week 24 like the visual theme mockup
     val currentTab = MutableStateFlow(0) // 0: Hôm nay, 1: Lịch khám, 2: Dinh dưỡng, 3: Lịch nhắc, 4: Cá nhân
     val showLaborDialog = MutableStateFlow(false)
@@ -344,13 +353,50 @@ class PregnancyViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun toggleReminderTakenToday(reminder: MedicationReminderEntity) {
         viewModelScope.launch {
+            val repo = repository ?: return@launch
             val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
-            val newTakenDate = if (reminder.lastTakenDate == todayStr) {
-                null
+            val logExists = repo.getLogForReminderAndDate(reminder.id, todayStr)
+            if (logExists != null) {
+                repo.deleteReminderLog(reminder.id, todayStr)
+                repo.saveReminder(reminder.copy(lastTakenDate = null))
             } else {
-                todayStr
+                val log = ReminderLogEntity(
+                    id = "${reminder.id}_$todayStr",
+                    reminderId = reminder.id,
+                    date = todayStr,
+                    status = "TAKEN",
+                    medicationName = reminder.medicationName,
+                    type = reminder.type
+                )
+                repo.saveReminderLog(log)
+                repo.saveReminder(reminder.copy(lastTakenDate = todayStr))
             }
-            repository?.saveReminder(reminder.copy(lastTakenDate = newTakenDate))
+        }
+    }
+
+    fun logReminderAction(reminder: MedicationReminderEntity, status: String) {
+        viewModelScope.launch {
+            val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+            val log = ReminderLogEntity(
+                id = "${reminder.id}_$todayStr",
+                reminderId = reminder.id,
+                date = todayStr,
+                status = status,
+                medicationName = reminder.medicationName,
+                type = reminder.type
+            )
+            repository?.saveReminderLog(log)
+            // Sync legacy field for UI compatibility
+            val legacyDate = if (status == "TAKEN") todayStr else null
+            repository?.saveReminder(reminder.copy(lastTakenDate = legacyDate))
+        }
+    }
+
+    fun undoReminderAction(reminder: MedicationReminderEntity) {
+        viewModelScope.launch {
+            val todayStr = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+            repository?.deleteReminderLog(reminder.id, todayStr)
+            repository?.saveReminder(reminder.copy(lastTakenDate = null))
         }
     }
 
