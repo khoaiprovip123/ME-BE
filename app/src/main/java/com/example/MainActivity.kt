@@ -9,6 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -670,17 +671,17 @@ fun getFetalBiometrics(week: Int): List<BiometricIndicator> {
 
     // 6. FHR (Fetal Heart Rate) - Nhịp tim thai
     val fhr = when {
-        week < 6 -> "Chưa phát hiện"
-        week == 6 -> "110-120 bpm"
-        week == 7 -> "130-150 bpm"
-        week in 8..11 -> "150-175 bpm"
-        else -> "120-160 bpm (Ổn định)"
+        week < 6 -> "Chưa rõ"
+        week == 6 -> "110-120"
+        week == 7 -> "130-150"
+        week in 8..11 -> "150-175"
+        else -> "120-160"
     }
     list.add(
         BiometricIndicator(
             name = "Nhịp tim thai tiêu chuẩn",
             acronym = "FHR",
-            value = fhr,
+            value = if (fhr == "Chưa rõ") fhr else "$fhr bpm",
             progress = if (week >= 12) 0.7f else 0.9f,
             description = "Tần số đập của trái tim em bé mỗi phút.",
             interpretation = "Cột mốc sống còn biểu thị nhịp điệu sinh trưởng dẻo dai khỏe mạnh."
@@ -778,6 +779,21 @@ fun TodayTab(
         // Centered Big Week Header Banner (Always Centered & Yellow/Orange Highlighted for Milestones)
         item {
             val isGold = isGoldenWeek(weekData.weekNumber)
+            val alphaPulse = if (isGold) {
+                val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+                infiniteTransition.animateFloat(
+                    initialValue = 0.4f,
+                    targetValue = 1.0f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(1200, easing = FastOutSlowInEasing),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "alphaPulse"
+                ).value
+            } else {
+                1f
+            }
+
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -787,8 +803,8 @@ fun TodayTab(
                 ),
                 shape = RoundedCornerShape(20.dp),
                 border = BorderStroke(
-                    width = 1.5.dp,
-                    color = if (isGold) Color(0xFFFFA500) else DeepBrownSecondary.copy(alpha = 0.3f)
+                    width = if (isGold) 2.dp else 1.5.dp,
+                    color = if (isGold) Color(0xFFFFA500).copy(alpha = alphaPulse) else DeepBrownSecondary.copy(alpha = 0.3f)
                 )
             ) {
                 Column(
@@ -949,6 +965,11 @@ fun TodayTab(
             }
         }
 
+        // PROPOSAL 1: Daily Symptom & Mood Tracker Card
+        item {
+            TodaySymptomAndMoodCard()
+        }
+
         // Dynamic Special Medical Scan Warnings
         val specialTest = getWeekSpecialMedicalTests(weekData.weekNumber)
         if (specialTest != null) {
@@ -1053,29 +1074,34 @@ fun TodayTab(
                                             .padding(horizontal = 6.dp, vertical = 10.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
                                             Text(
                                                 text = bio.acronym,
                                                 fontSize = 13.sp,
                                                 fontWeight = FontWeight.ExtraBold,
-                                                color = if (isSelected) DeepBrownSecondary else DarkBrownText
+                                                color = if (isSelected) DeepBrownSecondary else DarkBrownText,
+                                                textAlign = TextAlign.Center
                                             )
                                             Spacer(modifier = Modifier.height(2.dp))
                                             Text(
                                                 text = bio.value,
                                                 fontSize = 11.sp,
                                                 fontWeight = FontWeight.Bold,
-                                                color = TextSlate
+                                                color = TextSlate,
+                                                textAlign = TextAlign.Center
                                             )
                                             Spacer(modifier = Modifier.height(2.dp))
                                             Text(
                                                 text = when (bio.acronym) {
                                                     "CRL" -> "KT đầu mông"
                                                     "BPD" -> "ĐK lưỡng đỉnh"
-                                                    "FL" -> "Xương đùi (FL)"
-                                                    "HC" -> "Chu vi đầu (HC)"
-                                                    "AC" -> "Chu vi bụng (AC)"
-                                                    "FHR" -> "Nhịp tim (FHR)"
+                                                    "FL" -> "Xương đùi"
+                                                    "HC" -> "Chu vi đầu"
+                                                    "AC" -> "Chu vi bụng"
+                                                    "FHR" -> "Nhịp tim thai"
                                                     "EFW" -> "Cân nặng ước"
                                                     else -> bio.name
                                                 },
@@ -1098,6 +1124,11 @@ fun TodayTab(
                     }
                     
                     selectedBiometric?.let { bio ->
+                        val animatedProgress by animateFloatAsState(
+                            targetValue = bio.progress,
+                            animationSpec = tween(durationMillis = 850, easing = FastOutSlowInEasing),
+                            label = "biometricProgress"
+                        )
                         Spacer(modifier = Modifier.height(12.dp))
                         HorizontalDivider(color = LightBorder, thickness = 0.5.dp)
                         Spacer(modifier = Modifier.height(8.dp))
@@ -1174,7 +1205,7 @@ fun TodayTab(
                                         fontWeight = FontWeight.Bold
                                     )
                                     LinearProgressIndicator(
-                                        progress = { bio.progress },
+                                        progress = { animatedProgress },
                                         modifier = Modifier
                                             .weight(1f)
                                             .height(5.dp)
@@ -1305,9 +1336,19 @@ fun TodayTab(
             }
         }
 
+        // PROPOSAL 2: Relaxation & Thai Giao Music Card
+        item {
+            ThaiGiaoRelaxMusicCard(currentWeek = weekData.weekNumber)
+        }
+
         // 👣 Fetal Kick Counter Section
         item {
             KickCounterCard()
+        }
+
+        // PROPOSAL 3: Contraction Timer Section
+        item {
+            ContractionTimerCard()
         }
 
         // === CHI TIẾT QUÁ TRÌNH HÌNH THÀNH THEO TỪNG GIAI ĐOẠN TỪNG TUẦN ===
@@ -6517,5 +6558,787 @@ fun ProfileInfoRow(
         )
     }
 }
+
+// ============================================================================
+// PROPOSAL 1: THEO DÕI TÂM TRẠNG & TRIỆU CHỨNG HÀNG NGÀY (DAILY MOOD & SYMPTOM REGISTER)
+// ============================================================================
+@Composable
+fun TodaySymptomAndMoodCard() {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
+    val todayStr = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
+    
+    var selectedMood by remember { mutableStateOf(prefs.getString("mood_$todayStr", "") ?: "") }
+    var selectedSymptoms by remember { 
+        mutableStateOf(
+            (prefs.getString("symptoms_$todayStr", "") ?: "")
+                .split(",")
+                .filter { it.isNotBlank() }
+                .toSet()
+        )
+    }
+
+    val moods = listOf(
+        "Vui vẻ 😊" to "HAPPY",
+        "Mệt mỏi 🥱" to "TIRED",
+        "Nhạy cảm 🌸" to "SENSITIVE",
+        "Lo lắng 🥺" to "ANXIOUS"
+    )
+
+    val symptoms = listOf(
+        "Ốm nghén 🤢" to "NAUSEA",
+        "Đau lưng ⚡" to "BACK_PAIN",
+        "Táo bón 🤰" to "CONSTIPATION",
+        "Chuột rút 🦵" to "CRAMP",
+        "Khó ngủ 👁️" to "INSOMNIA"
+    )
+
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = WhiteCard),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, LightBorder)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(Color(0xFFFFF0F2)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("🌸", fontSize = 14.sp)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Nhật Ký Sức Khỏe & Tâm Trạng",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = DeepBrownSecondary
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = "Tâm trạng của mẹ hôm nay:",
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = DarkBrownText
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                moods.forEach { (label, code) ->
+                    val isSelected = selectedMood == code
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(if (isSelected) SoftPeachPrimary else WarmBackground)
+                            .border(1.dp, if (isSelected) DeepBrownSecondary else LightBorder, RoundedCornerShape(10.dp))
+                            .clickable {
+                                val newVal = if (isSelected) "" else code
+                                selectedMood = newVal
+                                prefs.edit().putString("mood_$todayStr", newVal).apply()
+                            }
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = label,
+                            fontSize = 11.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isSelected) DarkBrownText else TextSlate
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Text(
+                text = "Triệu chứng thai kỳ hôm nay (chọn nhiều):",
+                fontSize = 11.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = DarkBrownText
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                val chunkedSymptoms = symptoms.chunked(3)
+                chunkedSymptoms.forEach { rowItems ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        rowItems.forEach { (label, code) ->
+                            val isSelected = selectedSymptoms.contains(code)
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (isSelected) Color(0xFFE8F5E9) else WarmBackground)
+                                    .border(
+                                        1.dp,
+                                        if (isSelected) Color(0xFF4CAF50) else LightBorder,
+                                        RoundedCornerShape(10.dp)
+                                    )
+                                    .clickable {
+                                        val updated = selectedSymptoms.toMutableSet()
+                                        if (isSelected) updated.remove(code) else updated.add(code)
+                                        selectedSymptoms = updated
+                                        prefs.edit().putString("symptoms_$todayStr", updated.joinToString(",")).apply()
+                                    }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = label,
+                                    fontSize = 11.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                    color = if (isSelected) Color(0xFF2E7D32) else TextSlate
+                                )
+                            }
+                        }
+                        if (rowItems.size < 3) {
+                            repeat(3 - rowItems.size) {
+                                Spacer(modifier = Modifier.weight(1f))
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (selectedMood.isNotBlank() || selectedSymptoms.isNotEmpty()) {
+                val adviceText = remember(selectedMood, selectedSymptoms) {
+                    val sb = java.lang.StringBuilder()
+                    if (selectedMood == "TIRED") sb.append("😴 Mẹ cảm thấy mệt mỏi? Hãy đảm bảo ngủ đủ 8 tiếng, uống nước ấm và dạo bộ nhẹ nhàng nhé.\n")
+                    if (selectedMood == "ANXIOUS") sb.append("🥺 Bình tĩnh mẹ nhé, thai nghén thỉnh thoảng sẽ có lo lắng. Hãy hít sâu 3 giây, thở chậm 5 giây xua tan căng thẳng.\n")
+                    
+                    if (selectedSymptoms.contains("NAUSEA")) sb.append("🤢 Giảm nghén: Mẹ ăn bữa nhỏ chia đều, ngậm lát gừng mỏng ấm hoặc nhâm nhi chút bánh quy nhạt.\n")
+                    if (selectedSymptoms.contains("BACK_PAIN")) sb.append("⚡ Đau lưng: Tránh đứng quá lâu, xoa bóp nhẹ nhàng thắt lưng và ngủ nghiêng trái gối kê cao chân.\n")
+                    if (selectedSymptoms.contains("CONSTIPATION")) sb.append("🤰 Táo bón: Tăng cường rau xanh đậm, khoai lang chín và hoàn thành tối thiểu 2.5 lít nước ấm mỗi ngày.\n")
+                    if (selectedSymptoms.contains("CRAMP")) sb.append("🦵 Chuột rút: Thêm canxi tự nhiên (sữa, tôm cá), bóp chân buổi tối trước khi ngủ và xoa ấm bắp chân.\n")
+                    if (selectedSymptoms.contains("INSOMNIA")) sb.append("👁️ Khó ngủ: Thử ngâm chân nước ấm trước khi nằm đầu, tắt điện thoại sớm và thở đều thư thái.\n")
+                    
+                    if (sb.isEmpty()) "Con đang lớn lên khỏe mạnh dẻo dai! Hãy duy trì lối sống khoa học mẹ nhé."
+                    else sb.toString().trim()
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = WarmPeachCard),
+                    border = BorderStroke(0.5.dp, DeepBrownSecondary.copy(alpha = 0.25f)),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Info,
+                                contentDescription = null,
+                                tint = DeepBrownSecondary,
+                                modifier = Modifier.size(15.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Bác sĩ khuyên mẹ bầu hôm nay:",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = DarkBrownText
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = adviceText,
+                            fontSize = 11.5.sp,
+                            color = TextSlate,
+                            lineHeight = 16.sp
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// PROPOSAL 2: TRẠM THƯ GIÃN & THAI GIÁO ÂM NHẠC (PRENATAL MUSIC & ADVICE CORNER)
+// ============================================================================
+@Composable
+fun ThaiGiaoRelaxMusicCard(currentWeek: Int) {
+    var isPlaying by remember { mutableStateOf(false) }
+    var currentTrackIndex by remember { mutableStateOf(0) }
+    var trackProgress by remember { mutableStateOf(0.12f) }
+    
+    val tracks = listOf(
+        "🎧 Nhạc thính phòng Mozart thông minh" to "3:15",
+        "🌊 Tiếng sóng biển & tiếng chim ru ngủ" to "5:00",
+        "🍼 Lời thủ thỉ nói chuyện cùng con yêu" to "2:45",
+        "🕯️ Thiền thở thư thái tĩnh tâm giảm lo" to "4:20"
+    )
+
+    LaunchedEffect(isPlaying) {
+        if (isPlaying) {
+            while (isPlaying) {
+                delay(1000L)
+                trackProgress += 0.015f
+                if (trackProgress >= 1f) {
+                    trackProgress = 0f
+                    currentTrackIndex = (currentTrackIndex + 1) % tracks.size
+                }
+            }
+        }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = WhiteCard),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.dp, LightBorder)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFFE8F5E9)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("🎵", fontSize = 14.sp)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Trạm Thư Giãn & Thai Giáo Âm Nhạc",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = DeepBrownSecondary
+                    )
+                }
+                
+                if (isPlaying) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+                        val barHeight1 by infiniteTransition.animateFloat(
+                            initialValue = 4f, targetValue = 18f,
+                            animationSpec = infiniteRepeatable(tween(400, delayMillis = 100), RepeatMode.Reverse),
+                            label = "bh1"
+                        )
+                        val barHeight2 by infiniteTransition.animateFloat(
+                            initialValue = 16f, targetValue = 6f,
+                            animationSpec = infiniteRepeatable(tween(550), RepeatMode.Reverse),
+                            label = "bh2"
+                        )
+                        val barHeight3 by infiniteTransition.animateFloat(
+                            initialValue = 8f, targetValue = 14f,
+                            animationSpec = infiniteRepeatable(tween(300, delayMillis = 50), RepeatMode.Reverse),
+                            label = "bh3"
+                        )
+                        
+                        Box(Modifier.size(3.dp, barHeight1.dp).background(DeepBrownSecondary, RoundedCornerShape(1.dp)))
+                        Box(Modifier.size(3.dp, barHeight2.dp).background(DeepBrownSecondary, RoundedCornerShape(1.dp)))
+                        Box(Modifier.size(3.dp, barHeight3.dp).background(DeepBrownSecondary, RoundedCornerShape(1.dp)))
+                    }
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = "Kích thích thính giác và não bộ thai nhi phát triển từ tuần 14 trở đi thông qua giai điệu âm nhạc êm dịu, ấm áp.",
+                fontSize = 11.5.sp,
+                color = TextSlate,
+                lineHeight = 16.sp
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = WarmBackground),
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(0.5.dp, LightBorder)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = tracks[currentTrackIndex].first,
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = DarkBrownText,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "Thai giáo âm thanh • Thời lượng ${tracks[currentTrackIndex].second}",
+                                fontSize = 10.sp,
+                                color = TextMuted
+                            )
+                        }
+                        
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(
+                                onClick = {
+                                    currentTrackIndex = if (currentTrackIndex > 0) currentTrackIndex - 1 else tracks.size - 1
+                                    trackProgress = 0.05f
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Text("⏮️", fontSize = 14.sp)
+                            }
+                            
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(DeepBrownSecondary)
+                                    .clickable { isPlaying = !isPlaying },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = if (isPlaying) Icons.Default.Close else Icons.Default.PlayArrow,
+                                    contentDescription = if (isPlaying) "Stop" else "Play",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            
+                            IconButton(
+                                onClick = {
+                                    currentTrackIndex = (currentTrackIndex + 1) % tracks.size
+                                    trackProgress = 0.05f
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Text("⏭️", fontSize = 14.sp)
+                            }
+                        }
+                    }
+                    
+                    if (isPlaying) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text("0:45", fontSize = 9.sp, color = TextMuted)
+                            LinearProgressIndicator(
+                                progress = { trackProgress.coerceIn(0f, 1f) },
+                                color = DeepBrownSecondary,
+                                trackColor = LightBorder,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(4.dp)
+                                    .clip(RoundedCornerShape(2.dp))
+                            )
+                            Text(tracks[currentTrackIndex].second, fontSize = 9.sp, color = TextMuted)
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+            
+            val visualThaiGiaoTip = when (currentWeek) {
+                in 1..13 -> "🌱 Giai đoạn Tam cá nguyệt 1: Hãy bắt đầu tập hít thở bụng sâu thư thái dồi dào lượng oxy cho bé cơ bản. Đọc truyện cổ tích, thì thầm nhẹ chào con để truyền năng lượng yêu thương lành mạnh."
+                in 14..27 -> "🎨 Giai đoạn Tam cá nguyệt 2: Thính giác của bé đã phát triển tích cực! Mẹ hãy bật các bản concerto mượt mà của Mozart, đặt tay lên bụng kết hợp vuốt từ trái sang phải nhịp nhàng để tăng cường liên kết cảm giác."
+                else -> "⭐ Giai đoạn Tam cá nguyệt 3: Bé đã nhận ra giọng nói của bố mẹ rõ nét. Bố và mẹ hãy trò chuyện thường xuyên, hát ru ấm áp mỗi tối để nuôi dưỡng cảm xúc vàng cho bé yêu sinh trưởng khỏe mượt."
+            }
+
+            Text(
+                text = "💡 Gợi ý thai giáo hôm nay (Tuần $currentWeek):",
+                fontSize = 10.5.sp,
+                fontWeight = FontWeight.Bold,
+                color = DarkBrownText
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = visualThaiGiaoTip,
+                fontSize = 11.sp,
+                color = TextSlate,
+                lineHeight = 15.sp,
+                fontStyle = FontStyle.Italic
+            )
+        }
+    }
+}
+
+// ============================================================================
+// PROPOSAL 3: BỘ ĐẾM CƠN GÒ TỬ CUNG (CONTRACTION TIMER & ANALYSIS ENGINE)
+// ============================================================================
+@Composable
+fun ContractionTimerCard() {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
+    
+    var isRecording by remember { mutableStateOf(false) }
+    var currentTimerSeconds by remember { mutableStateOf(0) }
+    var recordingStartDate by remember { mutableStateOf<Long?>(null) }
+    
+    var logs by remember { mutableStateOf(emptyList<String>()) }
+    var isExpanded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        val raw = prefs.getString("contraction_logs", "") ?: ""
+        if (raw.isNotBlank()) {
+            logs = raw.split(";;").filter { it.isNotBlank() }
+        }
+    }
+
+    val saveNewContraction = { start: Long, end: Long ->
+        val entry = "$start|$end"
+        val updatedList = (listOf(entry) + logs).take(25)
+        logs = updatedList
+        prefs.edit().putString("contraction_logs", updatedList.joinToString(";;")).apply()
+    }
+
+    LaunchedEffect(isRecording) {
+        if (isRecording) {
+            currentTimerSeconds = 0
+            while (isRecording) {
+                delay(1000L)
+                currentTimerSeconds += 1
+            }
+        }
+    }
+
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = WhiteCard),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(1.5.dp, AlertRed.copy(alpha = 0.3f))
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(AlertLightBg),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("⏱️", fontSize = 14.sp)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Bộ Đếm Cơn Gò Tử Cung",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = AlertDarkText
+                    )
+                }
+                
+                IconButton(
+                    onClick = { isExpanded = !isExpanded },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Text(
+                        text = if (isExpanded) "▲" else "▼",
+                        fontSize = 11.sp,
+                        color = AlertDarkText,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Công cụ đo tần suất, khoảng cách và thời gian co thắt tử cung. Giúp mẹ bầu phân biệt giữa cơn gò sinh lý Braxton Hicks và dấu hiệu chuyển dạ thực sự chuẩn xác để sẵn sàng đi sinh đúng lúc.",
+                fontSize = 11.5.sp,
+                color = TextSlate,
+                lineHeight = 16.sp
+            )
+            
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(if (isRecording) AlertLightBg else WarmBackground)
+                    .border(1.dp, if (isRecording) AlertRed else LightBorder, RoundedCornerShape(14.dp))
+                    .padding(14.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    if (isRecording) {
+                        Box(
+                            modifier = Modifier
+                                .size(64.dp)
+                                .clip(CircleShape)
+                                .background(AlertRed.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+                            val scale by infiniteTransition.animateFloat(
+                                initialValue = 0.9f,
+                                targetValue = 1.3f,
+                                animationSpec = infiniteRepeatable(
+                                    animation = tween(800, easing = FastOutSlowInEasing),
+                                    repeatMode = RepeatMode.Reverse
+                                ),
+                                label = "scale"
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .graphicsLayer {
+                                        scaleX = scale
+                                        scaleY = scale
+                                    }
+                                    .clip(CircleShape)
+                                    .background(AlertRed)
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Text(
+                            text = "ĐANG CO THẮT...",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = AlertRed,
+                            letterSpacing = 0.5.sp
+                        )
+                        Text(
+                            text = "$currentTimerSeconds giây",
+                            fontSize = 26.sp,
+                            fontWeight = FontWeight.Black,
+                            color = AlertDarkText
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        Button(
+                            onClick = {
+                                val end = System.currentTimeMillis()
+                                val start = recordingStartDate ?: (end - currentTimerSeconds * 1000L)
+                                saveNewContraction(start, end)
+                                isRecording = false
+                                recordingStartDate = null
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = AlertRed),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp)
+                        ) {
+                            Text("HẾT CƠN GÒ", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(50.dp)
+                                .clip(CircleShape)
+                                .background(DeepBrownSecondary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("⚡", fontSize = 20.sp)
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Nhấn nút này ngay khi thắt cơ bụng gò căng cứng",
+                            fontSize = 11.sp,
+                            color = TextMuted,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+                        
+                        Button(
+                            onClick = {
+                                recordingStartDate = System.currentTimeMillis()
+                                isRecording = true
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = DeepBrownSecondary),
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 24.dp, vertical = 8.dp)
+                        ) {
+                            Text("BẮT ĐẦU CƠN GÒ", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                        }
+                    }
+                }
+            }
+
+            if (logs.isNotEmpty()) {
+                val processedEntries = remember(logs) {
+                    val list = mutableListOf<ProcessedContraction>()
+                    for (i in logs.indices) {
+                        val parts = logs[i].split("|")
+                        if (parts.size >= 2) {
+                            val start = parts[0].toLongOrNull() ?: 0L
+                            val end = parts[1].toLongOrNull() ?: 0L
+                            val durationSeconds = ((end - start) / 1000L).coerceAtLeast(0L)
+                            
+                            var intervalSeconds = 0L
+                            if (i + 1 < logs.size) {
+                                val nextParts = logs[i + 1].split("|")
+                                if (nextParts.size >= 2) {
+                                    val prevStart = nextParts[0].toLongOrNull() ?: 0L
+                                    intervalSeconds = ((start - prevStart) / 1000L).coerceAtLeast(0L)
+                                }
+                            }
+                            list.add(ProcessedContraction(start, durationSeconds, intervalSeconds))
+                        }
+                    }
+                    list
+                }
+
+                val laborAlert = remember(processedEntries) {
+                    val recent = processedEntries.take(4)
+                    if (recent.size >= 3) {
+                        val avgDuration = recent.map { it.duration }.average()
+                        val validIntervals = recent.map { it.interval }.filter { it > 0 }
+                        if (validIntervals.isNotEmpty()) {
+                            val avgIntervalMins = (validIntervals.average() / 60.0)
+                            val intervalStr = String.format("%.1f", avgIntervalMins)
+                            val durationRound = Math.round(avgDuration)
+                            if (avgIntervalMins in 3.0..7.0 && avgDuration >= 35.0) {
+                                "🚨 CẢNH BÁO CHUYỂN DẠ THỰC SỰ: Cơn gò dồn dập cách nhau khoảng $intervalStr phút, kéo dài trung bình ${durationRound}s. Đây là mốc cảnh báo 5-1-1! Mẹ hãy mang theo làn sinh và đi đến bệnh viện lập tức."
+                            } else if (avgIntervalMins <= 15.0) {
+                                "⚠️ GHI NHẬN CƠN GÒ CO DÀY: Cơn gò gối đều đặn hơn (khoảng $intervalStr phút). Mẹ bầu hãy nằm nghiêng nghỉ ngơi, theo dõi nếu có dòng ối hoặc rỉ máu thì nhập viện ngay."
+                            } else {
+                                "🌿 CƠN GÒ THANH LỌC SINH LÝ: Cơn gò của mẹ thưa thớt, không đều đặn. Đây là co bóp Braxton Hicks lành tính. Mẹ thoải mái tắm nước ấm nhẹ, nằm yên tĩnh hít thở bụng sâu giảm căng thẳng."
+                            }
+                        } else {
+                            null
+                        }
+                    } else {
+                        null
+                    }
+                }
+
+                laborAlert?.let { alert ->
+                    Spacer(modifier = Modifier.height(12.dp))
+                    val isCriticalAlert = alert.startsWith("🚨")
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isCriticalAlert) AlertLightBg else Color(0xFFFEF7E0)
+                        ),
+                        border = BorderStroke(
+                            1.dp,
+                            if (isCriticalAlert) AlertRed else Color(0xFFFFA500)
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.Top,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = if (isCriticalAlert) AlertRed else Color(0xFFD46B08),
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                text = alert,
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isCriticalAlert) AlertDarkText else Color(0xFF7F1D1D),
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+                }
+
+                if (isExpanded) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "📋 Biểu Đồ Lịch Sử Co Thắt (Gần nhất)",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = AlertDarkText
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        processedEntries.take(6).forEach { item ->
+                            val formatter = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                            val timeStr = formatter.format(Date(item.startTime))
+                            
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(WarmBackground, RoundedCornerShape(8.dp))
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "Cơn gò lúc $timeStr",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = DarkBrownText
+                                    )
+                                    if (item.interval > 0) {
+                                        val intervalMins = item.interval / 10
+                                        val intervalSecs = item.interval % 60
+                                        val intervalText = if (intervalMins > 0) "${intervalMins}p ${intervalSecs}s" else "${intervalSecs}s"
+                                        Text(
+                                            text = "Cách lần gò trước: $intervalText",
+                                            fontSize = 10.sp,
+                                            color = TextMuted
+                                        )
+                                    } else {
+                                        Text(text = "Cơn gò đầu tiên trong chuỗi", fontSize = 10.sp, color = TextMuted)
+                                    }
+                                }
+                                
+                                Card(
+                                    colors = CardDefaults.cardColors(containerColor = AlertLightBg),
+                                    shape = RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(
+                                        text = "Kéo dài: ${item.duration}s",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = AlertRed,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(6.dp))
+                        TextButton(
+                            onClick = {
+                                prefs.edit().remove("contraction_logs").apply()
+                                logs = emptyList()
+                            },
+                            modifier = Modifier.align(Alignment.CenterHorizontally)
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = null, tint = AlertRed, modifier = Modifier.size(12.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Xóa lịch sử gò", fontSize = 11.sp, color = AlertRed, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+data class ProcessedContraction(
+    val startTime: Long,
+    val duration: Long,
+    val interval: Long
+)
+
 
 
