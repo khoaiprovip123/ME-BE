@@ -85,6 +85,7 @@ fun PregnancyApp() {
     val selectedWeekNum by viewModel.selectedWeek.collectAsStateWithLifecycle()
     val currentTab by viewModel.currentTab.collectAsStateWithLifecycle()
     val showLaborDialog by viewModel.showLaborDialog.collectAsStateWithLifecycle()
+    val loggedInEmail by viewModel.loggedInEmail.collectAsStateWithLifecycle()
 
     if (!isLoggedIn) {
         PregnancyAuthScreen(viewModel = viewModel)
@@ -376,7 +377,8 @@ fun PregnancyApp() {
                                     userTheme = activeUser.visualizationTheme,
                                     onThemeChanged = { viewModel.changeTheme(it) },
                                     onLaborAlertClick = { viewModel.toggleLaborDialog(true) },
-                                    visibleWeeks = visibleWeeks
+                                    visibleWeeks = visibleWeeks,
+                                    userEmail = loggedInEmail
                                 )
                                 1 -> AppointmentsTab(
                                     viewModel = viewModel,
@@ -757,7 +759,8 @@ fun TodayTab(
     userTheme: String,
     onThemeChanged: (String) -> Unit,
     onLaborAlertClick: () -> Unit,
-    visibleWeeks: List<FetalWeekEntity>
+    visibleWeeks: List<FetalWeekEntity>,
+    userEmail: String = ""
 ) {
     val biometrics = remember(weekData.weekNumber) { getFetalBiometrics(weekData.weekNumber) }
     var selectedBiometric by remember(weekData.weekNumber) { mutableStateOf<BiometricIndicator?>(null) }
@@ -967,7 +970,7 @@ fun TodayTab(
 
         // PROPOSAL 1: Daily Symptom & Mood Tracker Card
         item {
-            TodaySymptomAndMoodCard()
+            TodaySymptomAndMoodCard(userEmail = userEmail)
         }
 
         // Dynamic Special Medical Scan Warnings
@@ -1336,245 +1339,183 @@ fun TodayTab(
             }
         }
 
-        // PROPOSAL 2: Relaxation & Thai Giao Music Card
-        item {
-            ThaiGiaoRelaxMusicCard(currentWeek = weekData.weekNumber)
-        }
-
         // 👣 Fetal Kick Counter Section
         item {
-            KickCounterCard()
+            KickCounterCard(userEmail = userEmail)
         }
 
         // PROPOSAL 3: Contraction Timer Section
         item {
-            ContractionTimerCard()
+            ContractionTimerCard(userEmail = userEmail)
         }
 
-        // === CHI TIẾT QUÁ TRÌNH HÌNH THÀNH THEO TỪNG GIAI ĐOẠN TỪNG TUẦN ===
-        item {
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = "📚 CẨM NANG HÌNH THÀNH THEO GIAI ĐOẠN",
-                fontWeight = FontWeight.ExtraBold,
-                fontSize = 15.sp,
-                color = DeepBrownSecondary,
-                letterSpacing = 0.5.sp
-            )
-            Text(
-                text = "Chi tiết quá trình phát triển của bé qua các tuần bạn đã trải qua.",
-                fontSize = 11.sp,
-                color = TextSlate
-            )
-        }
-
-        // Grouping weeks by Trimester / Giai đoạn
-        val t1Weeks = visibleWeeks.filter { it.weekNumber in 1..13 }
-        val t2Weeks = visibleWeeks.filter { it.weekNumber in 14..27 }
-        val t3Weeks = visibleWeeks.filter { it.weekNumber in 28..42 }
-
+        // === CẨM NANG TOÀN DIỆN CHI TIẾT THEO TUẦN CHỈ ĐỊNH ===
         val currentWeek = weekData.weekNumber
-        val activeGroup = when (currentWeek) {
-            in 1..13 -> 1
-            in 14..27 -> 2
-            else -> 3
-        }
-
-        // Helper to place the current week (or selected week) at the absolute beginning of its group list
-        fun reorderWeeks(weeks: List<FetalWeekEntity>): List<FetalWeekEntity> {
-            val currentItem = weeks.find { it.weekNumber == currentWeek }
-            return if (currentItem != null) {
-                listOf(currentItem) + weeks.filter { it.weekNumber != currentWeek }
-            } else {
-                weeks
-            }
-        }
-
-        val reorderedT1 = if (activeGroup == 1) reorderWeeks(t1Weeks) else t1Weeks
-        val reorderedT2 = if (activeGroup == 2) reorderWeeks(t2Weeks) else t2Weeks
-        val reorderedT3 = if (activeGroup == 3) reorderWeeks(t3Weeks) else t3Weeks
-
-        // We show the group containing the active week at the absolute top of the booklet!
-        val groupRenderingOrder = when (activeGroup) {
-            1 -> listOf(1, 2, 3)
-            2 -> listOf(2, 3, 1)
-            else -> listOf(3, 2, 1)
-        }
-
-        groupRenderingOrder.forEach { groupNum ->
-            when (groupNum) {
-                1 -> {
-                    if (reorderedT1.isNotEmpty()) {
-                        item {
-                            StageHeaderCard(
-                                title = if (activeGroup == 1) "⭐ Giai đoạn hiện tại: Tam cá nguyệt thứ nhất (Tuần 1 - 13)" else "Giai đoạn 1: Tam cá nguyệt thứ nhất (Tuần 1 - 13)",
-                                description = "Bản lề thụ thai, hình thành tế bào mầm sống và các hệ cơ quan sơ khai nhất.",
-                                bgColor = SoftPeachPrimary.copy(alpha = 0.3f),
-                                borderColor = SoftPeachPrimary
-                            )
-                        }
-                        items(reorderedT1) { week ->
-                            FetalTimelineWeekCard(week = week, userTheme = userTheme, isCurrent = week.weekNumber == currentWeek)
-                        }
-                    }
-                }
-                2 -> {
-                    if (reorderedT2.isNotEmpty()) {
-                        item {
-                            StageHeaderCard(
-                                title = if (activeGroup == 2) "⭐ Giai đoạn hiện tại: Tam cá nguyệt thứ hai (Tuần 14 - 27)" else "Giai đoạn 2: Tam cá nguyệt thứ hai (Tuần 14 - 27)",
-                                description = "Bùng nổ phát triển xương khớp sụn tai, mỡ da, tế bào thần kinh và cảm nhận thai máy.",
-                                bgColor = EmeraldBg.copy(alpha = 0.4f),
-                                borderColor = EmeraldText.copy(alpha = 0.5f)
-                            )
-                        }
-                        items(reorderedT2) { week ->
-                            FetalTimelineWeekCard(week = week, userTheme = userTheme, isCurrent = week.weekNumber == currentWeek)
-                        }
-                    }
-                }
-                3 -> {
-                    if (reorderedT3.isNotEmpty()) {
-                        item {
-                            StageHeaderCard(
-                                title = if (activeGroup == 3) "⭐ Giai đoạn hiện tại: Tam cá nguyệt thứ ba (Tuần 28 - 41)" else "Giai đoạn 3: Tam cá nguyệt thứ ba (Tuần 28 - 41)",
-                                description = "Hoàn thiện tối ưu chức năng hô hấp phổi, mở nhắm mắt, xoay đầu ổn định chuẩn bị chuyển dạ.",
-                                bgColor = AlertLightBg,
-                                borderColor = AlertRed.copy(alpha = 0.3f)
-                            )
-                        }
-                        items(reorderedT3) { week ->
-                            FetalTimelineWeekCard(week = week, userTheme = userTheme, isCurrent = week.weekNumber == currentWeek)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun StageHeaderCard(
-    title: String,
-    description: String,
-    bgColor: Color,
-    borderColor: Color
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-        colors = CardDefaults.cardColors(containerColor = bgColor),
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, borderColor)
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(text = title, fontSize = 13.sp, fontWeight = FontWeight.ExtraBold, color = DeepBrownSecondary)
-            Spacer(modifier = Modifier.height(3.dp))
-            Text(text = description, fontSize = 11.sp, color = DarkBrownText)
-        }
-    }
-}
-
-@Composable
-fun FetalTimelineWeekCard(
-    week: FetalWeekEntity,
-    userTheme: String,
-    isCurrent: Boolean = false
-) {
-    val sizeText = when (userTheme) {
-        "FRUIT" -> week.fruitEquivalent
-        "BAKERY" -> week.bakeryEquivalent
-        "ANIMAL" -> week.animalEquivalent
-        else -> week.fruitEquivalent
-    }
-    val emoji = getEmojiForTheme(week.weekNumber, userTheme)
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isCurrent) SoftPeachPrimary.copy(alpha = 0.08f) else WhiteCard
-        ),
-        shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(
-            width = if (isCurrent) 1.5.dp else 0.5.dp, 
-            color = if (isCurrent) SoftPeachPrimary else LightBorder
-        )
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
+        item {
+            Spacer(modifier = Modifier.height(12.dp))
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                colors = CardDefaults.cardColors(containerColor = WhiteCard),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.5.dp, SoftPeachPrimary)
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(32.dp)
-                            .clip(CircleShape)
-                            .background(SoftPeachPrimary.copy(alpha = if (isCurrent) 0.8f else 0.4f)),
-                        contentAlignment = Alignment.Center
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(text = emoji, fontSize = 16.sp)
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(SoftPeachPrimary.copy(alpha = 0.2f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(text = "📚", fontSize = 18.sp)
+                        }
+                        Column {
+                            Text(
+                                text = "CẨM NANG CHI TIẾT TUẦN $currentWeek",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = DeepBrownSecondary
+                            )
+                            Text(
+                                text = "Bí quyết chăm sóc toàn diện thiết kế riêng cho mốc tuần này",
+                                fontSize = 11.sp,
+                                color = TextSlate
+                            )
+                        }
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // Detail 1: Physiology Detail (Sự Phát Triển Sinh Lý Của Bé)
                     Text(
-                        text = "Tuần thứ ${week.weekNumber}",
-                        fontSize = 13.sp,
+                        text = "👶 Sự hình thành & phát triển của bé yêu:",
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = DarkBrownText
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = weekData.physiologyDescription,
+                        fontSize = 12.sp,
+                        color = TextSlate,
+                        lineHeight = 18.sp
+                    )
+                    
+                    Spacer(modifier = Modifier.height(14.dp))
+                    HorizontalDivider(color = LightBorder, thickness = 0.5.dp)
+                    Spacer(modifier = Modifier.height(14.dp))
+                    
+                    // Detail 2: Nutrition (Khuyên dùng dinh dưỡng tuần này)
+                    Text(
+                        text = "🥦 Chế độ dinh dưỡng khuyên dùng tuần này:",
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = EmeraldText
+                    )
+                    Spacer(modifier = Modifier.height(5.dp))
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = EmeraldBg.copy(alpha = 0.3f)),
+                        shape = RoundedCornerShape(12.dp),
+                        border = BorderStroke(0.5.dp, EmeraldText.copy(alpha = 0.3f))
+                    ) {
+                        Text(
+                            text = weekData.nutritionalRecommendation,
+                            fontSize = 12.sp,
+                            color = DarkBrownText,
+                            lineHeight = 18.sp,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(14.dp))
+                    HorizontalDivider(color = LightBorder, thickness = 0.5.dp)
+                    Spacer(modifier = Modifier.height(14.dp))
+                    
+                    // Detail 3: Maternal Changes (Thay đổi cơ thể mẹ)
+                    Text(
+                        text = "🤰 Thay đổi nổi bật trên cơ thể mẹ bầu:",
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = DarkBrownText
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = weekData.maternalChanges,
+                        fontSize = 12.sp,
+                        color = TextSlate,
+                        lineHeight = 18.sp
+                    )
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    HorizontalDivider(color = LightBorder, thickness = 0.5.dp)
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // Detail 4: Dynamic checklist tasks to execute
+                    Text(
+                        text = "💡 Việc quan trọng mẹ bầu cần hành động tuần này:",
+                        fontSize = 13.5.sp,
                         fontWeight = FontWeight.Bold,
                         color = DeepBrownSecondary
                     )
-                    if (isCurrent) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = SoftPeachPrimary),
-                            shape = RoundedCornerShape(4.dp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    val bulletTasks = when (currentWeek) {
+                        in 1..13 -> listOf(
+                            "Bổ sung Acid Folic & Vitamin đầy đủ giúp chống dị tật ống thần kinh sớm cho bé.",
+                            "Tránh tiếp xúc môi trường ô nhiễm khói thuốc, hóa chất độc hại hay thực phẩm sống tái.",
+                            "Kiểm tra sàng lọc sớm qua siêu âm mốc vàng đo độ mờ da gáy (tuần 11-13)."
+                        )
+                        in 14..27 -> listOf(
+                            "Bổ sung Canxi & Sắt đều đặn theo chỉ định để xây dựng khung xương chắc khỏe cho thiên thần nhỏ.",
+                            "Dành 15-20 phút tương tác thai giáo vuốt bụng nhẹ kết hợp hát ru êm ái xoa dịu.",
+                            "Chú ý ghi nhận cử động thai máy đầu tiên (thường rõ rệt từ tuần 18-20)."
+                        )
+                        in 28..35 -> listOf(
+                            "Theo dõi sát nhịp cử động thai bằng công cụ đếm thai máy chuyên biệt phía trên.",
+                            "Tập các bài hít thở đều, nằm nghiêng trái khi ngủ giúp dồi dào oxy vận chuyển đến nhau thai.",
+                            "Chuẩn bị dần danh sách vật dụng sơ sinh cho bé và tìm hiểu chế độ sinh nở an toàn."
+                        )
+                        else -> listOf(
+                            "Thực hiện siêu âm theo dõi tăng trưởng, kiểm tra nước ối thường xuyên giai đoạn cận sinh.",
+                            "Chuẩn bị đầy đủ giỏ đồ đi sinh (làn sinh) và các giấy tờ tùy thân nhập viện khẩn cấp.",
+                            "Sử dụng công cụ Đếm cơn gò tử cung bên dưới để phát hiện sớm các cơn gò chuyển dạ (quy luật 5-1-1)."
+                        )
+                    }
+                    
+                    bulletTasks.forEach { task ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.Top,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
+                            Box(
+                                modifier = Modifier
+                                    .padding(top = 3.dp)
+                                    .size(16.dp)
+                                    .clip(CircleShape)
+                                    .background(SoftPeachPrimary),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(text = "✓", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            }
                             Text(
-                                text = "🌟 Hiện Tại",
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.ExtraBold,
-                                color = Color.White,
-                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                                text = task,
+                                fontSize = 11.5.sp,
+                                color = DarkBrownText,
+                                lineHeight = 16.sp
                             )
                         }
                     }
                 }
-                
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = if (isCurrent) SoftPeachPrimary.copy(alpha = 0.15f) else WarmBackground),
-                    shape = RoundedCornerShape(6.dp)
-                ) {
-                    Text(
-                        text = "⚖️ ${week.avgWeightG}g | 📏 ${week.avgLengthCm}cm",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = if (isCurrent) DeepBrownSecondary else TextSlate,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                }
             }
-
-            Spacer(modifier = Modifier.height(6.dp))
-            Text(
-                text = "Kích thước tương đương: $sizeText",
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = DarkBrownText
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "👶 Quá trình hình thành: ${week.physiologyDescription}",
-                fontSize = 11.5.sp,
-                color = TextSlate,
-                lineHeight = 16.sp
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "🥦 Dinh dưỡng khuyên dùng: ${week.nutritionalRecommendation}",
-                fontSize = 11.5.sp,
-                color = EmeraldText,
-                lineHeight = 16.sp,
-                fontWeight = FontWeight.Medium
-            )
         }
     }
 }
@@ -2307,7 +2248,7 @@ fun NutritionTab(
 
         // 💧 Pregnancy Water Intake Logger Section
         item {
-            WaterTrackerCard()
+            WaterTrackerCard(userEmail = viewModel.loggedInEmail.value)
         }
 
         // RECONFIGURED: Comprehensive Golden Food Groups (Rau Củ, Thịt, Sữa, Hạt)
@@ -5937,9 +5878,10 @@ fun LiquidGlassButton(
 // CUSTOM ENHANCEMENT: FETAL KICK COUNTER (ĐỘNG THAI MÁY)
 // ==========================================
 @Composable
-fun KickCounterCard() {
+fun KickCounterCard(userEmail: String = "") {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
+    val prefsName = if (userEmail.isNotBlank()) "app_prefs_$userEmail" else "app_prefs"
+    val prefs = remember(userEmail) { context.getSharedPreferences(prefsName, Context.MODE_PRIVATE) }
     
     // Timer & Count states
     var isTracking by remember { mutableStateOf(false) }
@@ -5950,7 +5892,7 @@ fun KickCounterCard() {
     var historyLogs by remember { mutableStateOf(emptyList<String>()) }
     
     // Load existing logs on start
-    LaunchedEffect(Unit) {
+    LaunchedEffect(userEmail) {
         val raw = prefs.getString("fetal_kick_logs", "") ?: ""
         if (raw.isNotBlank()) {
             historyLogs = raw.split(";;").filter { it.isNotBlank() }
@@ -6310,9 +6252,10 @@ fun KickCounterCard() {
 // CUSTOM ENHANCEMENT: WATER TRACKER (THEO DÕI NƯỚC ỐI)
 // ==========================================
 @Composable
-fun WaterTrackerCard() {
+fun WaterTrackerCard(userEmail: String = "") {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
+    val prefsName = if (userEmail.isNotBlank()) "app_prefs_$userEmail" else "app_prefs"
+    val prefs = remember(userEmail) { context.getSharedPreferences(prefsName, Context.MODE_PRIVATE) }
     
     // Date key to persist daily tracking
     val todayDateStr = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
@@ -6322,7 +6265,7 @@ fun WaterTrackerCard() {
     val targetWaterMl = 2500 // Daily recommended for pregnant mothers
     
     // Load existing water log on launch
-    LaunchedEffect(Unit) {
+    LaunchedEffect(userEmail) {
         currentWaterMl = prefs.getInt(waterKey, 0)
     }
     
@@ -6563,9 +6506,10 @@ fun ProfileInfoRow(
 // PROPOSAL 1: THEO DÕI TÂM TRẠNG & TRIỆU CHỨNG HÀNG NGÀY (DAILY MOOD & SYMPTOM REGISTER)
 // ============================================================================
 @Composable
-fun TodaySymptomAndMoodCard() {
+fun TodaySymptomAndMoodCard(userEmail: String = "") {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
+    val prefsName = if (userEmail.isNotBlank()) "app_prefs_$userEmail" else "app_prefs"
+    val prefs = remember(userEmail) { context.getSharedPreferences(prefsName, Context.MODE_PRIVATE) }
     val todayStr = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
     
     var selectedMood by remember { mutableStateOf(prefs.getString("mood_$todayStr", "") ?: "") }
@@ -6980,9 +6924,10 @@ fun ThaiGiaoRelaxMusicCard(currentWeek: Int) {
 // PROPOSAL 3: BỘ ĐẾM CƠN GÒ TỬ CUNG (CONTRACTION TIMER & ANALYSIS ENGINE)
 // ============================================================================
 @Composable
-fun ContractionTimerCard() {
+fun ContractionTimerCard(userEmail: String = "") {
     val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE) }
+    val prefsName = if (userEmail.isNotBlank()) "app_prefs_$userEmail" else "app_prefs"
+    val prefs = remember(userEmail) { context.getSharedPreferences(prefsName, Context.MODE_PRIVATE) }
     
     var isRecording by remember { mutableStateOf(false) }
     var currentTimerSeconds by remember { mutableStateOf(0) }
@@ -6991,7 +6936,7 @@ fun ContractionTimerCard() {
     var logs by remember { mutableStateOf(emptyList<String>()) }
     var isExpanded by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(userEmail) {
         val raw = prefs.getString("contraction_logs", "") ?: ""
         if (raw.isNotBlank()) {
             logs = raw.split(";;").filter { it.isNotBlank() }
