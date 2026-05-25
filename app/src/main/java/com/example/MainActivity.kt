@@ -4,6 +4,7 @@ import android.os.Bundle
 import android.content.Context
 import android.content.Intent
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -29,6 +30,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlin.math.abs
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -179,12 +182,8 @@ fun PregnancyApp() {
         }
     }
 
-    val visibleWeeks = remember(allWeeks, userCurrentWeekNum) {
-        if (userCurrentWeekNum in 1..41) {
-            allWeeks.filter { it.weekNumber <= userCurrentWeekNum }
-        } else {
-            allWeeks
-        }
+    val visibleWeeks = remember(allWeeks) {
+        allWeeks
     }
 
     if (!hasSetupProfileState) {
@@ -216,12 +215,15 @@ fun PregnancyApp() {
         }
     }
 
-    val pagerState = rememberPagerState(initialPage = currentTab) { 5 }
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    val pagerState = rememberPagerState(initialPage = currentTab.coerceIn(0, 3)) { 4 }
 
     // Sync viewModel tab change to pager state
     LaunchedEffect(currentTab) {
-        if (pagerState.currentPage != currentTab) {
-            pagerState.animateScrollToPage(currentTab)
+        val coerced = currentTab.coerceIn(0, 3)
+        if (pagerState.currentPage != coerced) {
+            pagerState.animateScrollToPage(coerced)
         }
     }
 
@@ -232,134 +234,172 @@ fun PregnancyApp() {
         }
     }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        contentWindowInsets = WindowInsets.safeDrawing,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            text = "MẸ & BÉ",
-                            fontSize = 17.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = DeepBrownSecondary,
-                            letterSpacing = 0.5.sp
-                        )
-                        Text(
-                            text = if (currentDateTimeStr.isNotBlank()) currentDateTimeStr else "Đang cập nhật thời gian...",
-                            fontSize = 11.sp,
-                            color = TextMuted,
-                            fontWeight = FontWeight.Normal
-                        )
-                    }
-                },
-                actions = {
-                    if (selectedWeekNum != -1) {
-                        val preciseAge = viewModel.calculateDetailedGestationalAge(activeUser.lmpDate, activeUser.eddDate)
-                        Card(
-                            modifier = Modifier.padding(end = 12.dp),
-                            colors = CardDefaults.cardColors(containerColor = SoftPeachPrimary),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+    ModalNavigationDrawer(
+        drawerState = drawerState,
+        drawerContent = {
+            ModalDrawerSheet(
+                drawerContainerColor = WarmBackground,
+                modifier = Modifier.width(320.dp)
+            ) {
+                SettingsDrawerContent(
+                    viewModel = viewModel,
+                    user = activeUser,
+                    onClose = { scope.launch { drawerState.close() } }
+                )
+            }
+        }
+    ) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            contentWindowInsets = WindowInsets.safeDrawing,
+            topBar = {
+                TopAppBar(
+                    navigationIcon = {
+                        IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                            Icon(
+                                imageVector = Icons.Default.Menu,
+                                contentDescription = "Mở rộng cài đặt",
+                                tint = DeepBrownSecondary
+                            )
+                        }
+                    },
+                    title = {
+                        Column {
+                            Text(
+                                text = "MẸ & BÉ",
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = DeepBrownSecondary,
+                                letterSpacing = 0.5.sp
+                            )
+                            Text(
+                                text = if (currentDateTimeStr.isNotBlank()) currentDateTimeStr else "Đang cập nhật thời gian...",
+                                fontSize = 11.sp,
+                                color = TextMuted,
+                                fontWeight = FontWeight.Normal
+                            )
+                        }
+                    },
+                    actions = {
+                        if (selectedWeekNum != -1) {
+                            val preciseAge = viewModel.calculateDetailedGestationalAge(activeUser.lmpDate, activeUser.eddDate)
+                            Card(
+                                modifier = Modifier.padding(end = 12.dp),
+                                colors = CardDefaults.cardColors(containerColor = SoftPeachPrimary),
+                                shape = RoundedCornerShape(12.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Favorite,
-                                    contentDescription = "Sức khỏe",
-                                    tint = DeepBrownSecondary,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text(
-                                        text = preciseAge,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = DeepBrownSecondary
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Favorite,
+                                        contentDescription = "Sức khỏe",
+                                        tint = DeepBrownSecondary,
+                                        modifier = Modifier.size(13.dp)
                                     )
-                                    Text(
-                                        text = "Tuần thứ $selectedWeekNum (đọc tin)",
-                                        fontSize = 8.5.sp,
-                                        color = DarkBrownText
-                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text(
+                                            text = preciseAge,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = DeepBrownSecondary
+                                        )
+                                        Text(
+                                            text = "Tuần thứ $selectedWeekNum (đọc tin)",
+                                            fontSize = 8.5.sp,
+                                            color = DarkBrownText
+                                        )
+                                    }
                                 }
                             }
                         }
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = WarmBackground
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = WarmBackground
+                    )
                 )
-            )
-        },
-        bottomBar = {
-            BottomNavigationBar(currentTab = currentTab, onTabSelected = { viewModel.changeTab(it) })
-        }
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .background(WarmBackground)
-        ) {
-            // Horizontal scrollable Week Selector (1 to 41) only when dates are set
-            if (selectedWeekNum != -1) {
-                WeekSelectorScroll(
-                    allWeeks = visibleWeeks,
-                    selectedWeek = selectedWeekNum,
-                    onWeekSelected = { viewModel.updateSelectedWeek(it) }
+            },
+            bottomBar = {
+                BottomNavigationBar(
+                    currentTab = currentTab,
+                    onTabSelected = { viewModel.changeTab(it) },
+                    onMenuSelected = { scope.launch { drawerState.open() } }
                 )
-
-                HorizontalDivider(color = LightBorder, thickness = 1.dp)
             }
-
-            // Dynamic Tab Views with Swipe-to-change feel using HorizontalPager
-            HorizontalPager(
-                state = pagerState,
+        ) { innerPadding ->
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .weight(1f)
-            ) { page ->
-                if (selectedWeekNum == -1 && (page == 0 || page == 2)) {
-                    SetupDatesGreetingCard(onSetupClick = { viewModel.changeTab(4) })
-                } else {
-                    when (page) {
-                        0 -> TodayTab(
-                            weekData = currentWeekData,
-                            userTheme = activeUser.visualizationTheme,
-                            onThemeChanged = { viewModel.changeTheme(it) },
-                            onLaborAlertClick = { viewModel.toggleLaborDialog(true) },
-                            visibleWeeks = visibleWeeks
-                        )
-                        1 -> AppointmentsTab(
-                            viewModel = viewModel,
-                            allAppointments = allAppointments,
-                            selectedWeek = selectedWeekNum
-                        )
-                        2 -> NutritionTab(
-                            viewModel = viewModel,
-                            weekData = currentWeekData
-                        )
-                        3 -> RemindersTab(
-                            viewModel = viewModel,
-                            allReminders = allReminders
-                        )
-                        4 -> ProfileTab(
-                            viewModel = viewModel,
-                            user = activeUser,
-                            allWeightRecords = allWeightRecords
-                        )
+                    .padding(innerPadding)
+                    .background(WarmBackground)
+            ) {
+                // Horizontal scrollable Week Selector (1 to 41) only when dates are set
+                if (selectedWeekNum != -1) {
+                    WeekSelectorScroll(
+                        allWeeks = visibleWeeks,
+                        selectedWeek = selectedWeekNum,
+                        onWeekSelected = { viewModel.updateSelectedWeek(it) }
+                    )
+
+                    HorizontalDivider(color = LightBorder, thickness = 1.dp)
+                }
+
+                // Dynamic Tab Views with Swipe-to-change feel using HorizontalPager
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .weight(1f)
+                ) { page ->
+                    val pageOffset = abs((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction)
+                    val alpha = 1f - pageOffset.coerceIn(0f, 1f)
+                    val scale = 0.96f + (alpha * 0.04f)
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                this.alpha = alpha
+                                this.scaleX = scale
+                                this.scaleY = scale
+                            }
+                    ) {
+                        if (selectedWeekNum == -1 && (page == 0 || page == 2)) {
+                            SetupDatesGreetingCard(onSetupClick = { scope.launch { drawerState.open() } })
+                        } else {
+                            when (page) {
+                                0 -> TodayTab(
+                                    weekData = currentWeekData,
+                                    userTheme = activeUser.visualizationTheme,
+                                    onThemeChanged = { viewModel.changeTheme(it) },
+                                    onLaborAlertClick = { viewModel.toggleLaborDialog(true) },
+                                    visibleWeeks = visibleWeeks
+                                )
+                                1 -> AppointmentsTab(
+                                    viewModel = viewModel,
+                                    allAppointments = allAppointments,
+                                    selectedWeek = selectedWeekNum
+                                )
+                                2 -> NutritionTab(
+                                    viewModel = viewModel,
+                                    weekData = currentWeekData
+                                )
+                                3 -> RemindersTab(
+                                    viewModel = viewModel,
+                                    allReminders = allReminders
+                                )
+                            }
+                        }
                     }
                 }
             }
-        }
 
-        // Labor Signs Overlay Dialog
-        if (showLaborDialog) {
-            LaborDialog(onDismiss = { viewModel.toggleLaborDialog(false) })
+            // Labor Signs Overlay Dialog
+            if (showLaborDialog) {
+                LaborDialog(onDismiss = { viewModel.toggleLaborDialog(false) })
+            }
         }
     }
 }
@@ -412,11 +452,24 @@ fun WeekSelectorScroll(
     onWeekSelected: (Int) -> Unit
 ) {
     val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val density = androidx.compose.ui.platform.LocalDensity.current
 
     LaunchedEffect(selectedWeek) {
+        delay(60) // Let the layout pass settle first so viewport width is updated correctly
         val index = allWeeks.indexOfFirst { it.weekNumber == selectedWeek }
         if (index >= 0) {
-            listState.animateScrollToItem(index = maxOf(0, index - 3))
+            var viewportWidth = listState.layoutInfo.viewportEndOffset - listState.layoutInfo.viewportStartOffset
+            if (viewportWidth == 0) {
+                delay(120) // Backup delay if first frame layout is not yet calculated
+                viewportWidth = listState.layoutInfo.viewportEndOffset - listState.layoutInfo.viewportStartOffset
+            }
+            if (viewportWidth > 0) {
+                val itemWidthPx = with(density) { 46.dp.roundToPx() }
+                val targetOffset = - (viewportWidth / 2 - itemWidthPx / 2)
+                listState.animateScrollToItem(index = index, scrollOffset = targetOffset)
+            } else {
+                listState.animateScrollToItem(index = maxOf(0, index - 3))
+            }
         }
     }
 
@@ -431,7 +484,7 @@ fun WeekSelectorScroll(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            items(allWeeks) { week ->
+            items(allWeeks, key = { it.weekNumber }) { week ->
                 val isSelected = week.weekNumber == selectedWeek
                 val isGold = isGoldenWeek(week.weekNumber)
 
@@ -443,15 +496,16 @@ fun WeekSelectorScroll(
                         .background(
                             when {
                                 isSelected -> DeepBrownSecondary
-                                isGold -> AmberBg
+                                isGold -> Color(0xFFFFF2CC) // Beautiful clear soft warning yellow
                                 else -> WhiteCard
                             }
                         )
                         .border(
-                            width = 1.dp,
+                            width = if (isSelected && isGold) 3.dp else if (isGold || isSelected) 2.dp else 1.dp,
                             color = when {
+                                isSelected && isGold -> Color(0xFFFFA500) // Select color but keep warning orange border
                                 isSelected -> DeepBrownSecondary
-                                isGold -> AlertBorder
+                                isGold -> Color(0xFFFFA500) // Bright Warning Orange
                                 else -> LightBorder
                             },
                             shape = CircleShape
@@ -466,7 +520,7 @@ fun WeekSelectorScroll(
                             fontWeight = FontWeight.Bold,
                             color = when {
                                 isSelected -> Color.White
-                                isGold -> AmberText
+                                isGold -> Color(0xFFD46B08) // Clear warning dark orange/amber code text
                                 else -> TextSlate
                             }
                         )
@@ -475,13 +529,224 @@ fun WeekSelectorScroll(
                                 text = "MỐC",
                                 fontSize = 7.sp,
                                 fontWeight = FontWeight.ExtraBold,
-                                color = AmberText
+                                color = if (isSelected) Color.White else Color(0xFFD46B08)
                             )
                         }
                     }
                 }
             }
         }
+    }
+}
+
+data class BiometricIndicator(
+    val name: String,
+    val acronym: String,
+    val value: String,
+    val progress: Float,
+    val description: String,
+    val interpretation: String
+)
+
+fun getFetalBiometrics(week: Int): List<BiometricIndicator> {
+    val list = mutableListOf<BiometricIndicator>()
+    
+    // 1. CRL (Crown-Rump Length) - Chiều dài đầu mông - Only up to week 14, afterwards length is measured as total length
+    if (week in 5..14) {
+        val crl = when(week) {
+            5 -> 2.0
+            6 -> 5.0
+            7 -> 10.0
+            8 -> 16.0
+            9 -> 23.0
+            10 -> 31.0
+            11 -> 41.0
+            12 -> 54.0
+            13 -> 74.0
+            14 -> 87.0
+            else -> 0.0
+        }
+        list.add(
+            BiometricIndicator(
+                name = "Chiều dài đầu mông",
+                acronym = "CRL",
+                value = "$crl mm",
+                progress = (crl / 90.0).toFloat().coerceIn(0f, 1f),
+                description = "Chiều dài đo từ đỉnh đầu đến phần mông của bé.",
+                interpretation = "Chỉ số vàng ở tam cá nguyệt đầu để xác định tuổi thai chính xác nhất."
+            )
+        )
+    }
+
+    // 2. BPD (Biparietal Diameter) - Đường kính lưỡng đỉnh - From week 12 onwards
+    if (week >= 12) {
+        val bpd = when {
+            week < 12 -> 0.0
+            week == 12 -> 15.0
+            week == 13 -> 20.0
+            week <= 20 -> 20.0 + (week - 13) * 3.7
+            week <= 30 -> 46.0 + (week - 20) * 2.6
+            else -> 72.0 + (week - 30) * 2.0
+        }.let { Math.round(it * 10) / 10.0 }
+        
+        list.add(
+            BiometricIndicator(
+                name = "Đường kính lưỡng đỉnh",
+                acronym = "BPD",
+                value = "$bpd mm",
+                progress = (bpd / 100.0).toFloat().coerceIn(0f, 1f),
+                description = "Đường kính mặt cắt ngang lớn nhất vùng hộp sọ của bé.",
+                interpretation = "Đánh giá mức độ phát triển của não bộ và là cơ sở để tính cân nặng."
+            )
+        )
+    }
+
+    // 3. FL (Femur Length) - Chiều dài xương đùi - From week 12 onwards
+    if (week >= 12) {
+        val fl = when {
+            week < 12 -> 0.0
+            week == 12 -> 8.0
+            week == 13 -> 10.0
+            week <= 20 -> 10.0 + (week - 13) * 3.3
+            week <= 30 -> 33.0 + (week - 20) * 2.1
+            else -> 54.0 + (week - 30) * 1.8
+        }.let { Math.round(it * 10) / 10.0 }
+        
+        list.add(
+            BiometricIndicator(
+                name = "Chiều dài xương đùi",
+                acronym = "FL",
+                value = "$fl mm",
+                progress = (fl / 80.0).toFloat().coerceIn(0f, 1f),
+                description = "Chiều dài của xương đùi - xương dài nhất trong cơ thể bé.",
+                interpretation = "Chỉ số quan trọng đánh giá chiều cao và sự phát triển xương chi."
+            )
+        )
+    }
+
+    // 4. HC (Head Circumference) - Chu vi vòng đầu - From week 12 onwards
+    if (week >= 12) {
+        val hc = when {
+            week < 12 -> 0.0
+            week == 12 -> 70.0
+            week <= 20 -> 84.0 + (week - 13) * 13.0
+            week <= 30 -> 175.0 + (week - 20) * 8.3
+            else -> 258.0 + (week - 30) * 7.5
+        }.let { Math.round(it * 10) / 10.0 }
+        
+        list.add(
+            BiometricIndicator(
+                name = "Chu vi vòng đầu",
+                acronym = "HC",
+                value = "$hc mm",
+                progress = (hc / 360.0).toFloat().coerceIn(0f, 1f),
+                description = "Độ dài vòng tròn chu vi đầu của thai nhi.",
+                interpretation = "Kiểm tra sự ổn định và cân đối cấu trúc não bộ qua từng tuần."
+            )
+        )
+    }
+
+    // 5. AC (Abdominal Circumference) - Chu vi vòng bụng - From week 12 onwards
+    if (week >= 12) {
+        val ac = when {
+            week < 12 -> 0.0
+            week == 12 -> 56.0
+            week <= 20 -> 70.0 + (week - 13) * 11.4
+            week <= 30 -> 150.0 + (week - 20) * 9.0
+            else -> 240.0 + (week - 30) * 10.0
+        }.let { Math.round(it * 10) / 10.0 }
+        
+        list.add(
+            BiometricIndicator(
+                name = "Chu vi vòng bụng",
+                acronym = "AC",
+                value = "$ac mm",
+                progress = (ac / 380.0).toFloat().coerceIn(0f, 1f),
+                description = "Độ dài vòng bụng đo qua phần gan, dạ dày của bé.",
+                interpretation = "Chỉ số phản ánh trạng thái dinh dưỡng và sự béo tốt của bé yêu."
+            )
+        )
+    }
+
+    // 6. FHR (Fetal Heart Rate) - Nhịp tim thai
+    val fhr = when {
+        week < 6 -> "Chưa phát hiện"
+        week == 6 -> "110-120 bpm"
+        week == 7 -> "130-150 bpm"
+        week in 8..11 -> "150-175 bpm"
+        else -> "120-160 bpm (Ổn định)"
+    }
+    list.add(
+        BiometricIndicator(
+            name = "Nhịp tim thai tiêu chuẩn",
+            acronym = "FHR",
+            value = fhr,
+            progress = if (week >= 12) 0.7f else 0.9f,
+            description = "Tần số đập của trái tim em bé mỗi phút.",
+            interpretation = "Cột mốc sống còn biểu thị nhịp điệu sinh trưởng dẻo dai khỏe mạnh."
+        )
+    )
+
+    // 7. EFW (Estimated Fetal Weight) - Cân nặng ước tính khoa học theo tuần
+    val efw = when {
+        week < 10 -> "Dưới 5 g"
+        week == 10 -> "4 g"
+        week == 11 -> "7 g"
+        week == 12 -> "14 g"
+        week == 13 -> "23 g"
+        week == 14 -> "43 g"
+        week == 15 -> "70 g"
+        week == 16 -> "100 g"
+        week == 17 -> "140 g"
+        week == 18 -> "190 g"
+        week == 19 -> "240 g"
+        week == 20 -> "300 g"
+        week == 21 -> "360 g"
+        week == 22 -> "430 g"
+        week == 23 -> "501 g"
+        week == 24 -> "600 g"
+        week == 25 -> "660 g"
+        week == 26 -> "760 g"
+        week == 27 -> "875 g"
+        week == 28 -> "1000 g"
+        week == 29 -> "1153 g"
+        week == 30 -> "1319 g"
+        week == 31 -> "1502 g"
+        week == 32 -> "1702 g"
+        week == 33 -> "1918 g"
+        week == 34 -> "2146 g"
+        week == 35 -> "2383 g"
+        week == 36 -> "2622 g"
+        week == 37 -> "2859 g"
+        week == 38 -> "3083 g"
+        week == 39 -> "3288 g"
+        week == 40 -> "3462 g"
+        else -> "Dưới 5 g"
+    }
+    list.add(
+        BiometricIndicator(
+            name = "Cân nặng ước tính khoa học",
+            acronym = "EFW",
+            value = efw,
+            progress = (week / 40.0).toFloat().coerceIn(0f, 1f),
+            description = "Cân nặng tiêu chuẩn trung bình của em bé ở tuần Thai hiện tại.",
+            interpretation = "Giúp đánh giá bé yêu có phát triển đúng theo biểu đồ tiêu chuẩn quốc tế không."
+        )
+    )
+
+    return list
+}
+
+fun getWeekSpecialMedicalTests(week: Int): String? {
+    return when (week) {
+        in 11..13 -> "🩺 MỤC TIÊU VÀNG (Tuần 11 - 13): Siêu âm đo Độ mờ da gáy (Nuchal Translucency) kết hợp Xét nghiệm Double Test để tầm soát hội chứng Down, Edwards, Patau thời kỳ đầu."
+        in 15..19 -> "🩸 XÉT NGHIỆM TRIPLE TEST (Tuần 15 - 19): Sàng lọc nguy cơ khuyết tật ống thần kinh (vô sọ, hở cột sống) và dị dạng NST nếu mẹ chưa đo Double Test trước đó."
+        in 20..24 -> "📸 SIÊU ÂM HÌNH THÁI HỌC 4D (Tuần 20 - 24): Tầm soát toàn diện cấu trúc cơ thể bé (dị tật tim bẩm sinh, sứt môi, hở hàm ếch, dị dạng chi, thừa thiếu ngón)."
+        in 24..28 -> "🥤 TẦM SOÁT ĐƯỜNG HUYẾT (Tuần 24 - 28): Nghiệm pháp dung nạp 75g Glucose tầm soát tiểu đường thai kỳ, phòng ngừa các biến chứng nguy hiểm cho mẹ và bé trước sinh."
+        in 32..35 -> "🩺 SIÊU ÂM NGÔI THAI & NHAU ỐI (Tuần 32 - 35): Xác định ngôi thai đầu/mông thuận nghịch, kiểm tra vị trí bánh nhau bám thấp, thể tích nước ối đục trong."
+        in 35..37 -> "🧪 XÉT NGHIỆM LIÊN CẦU KHUẨN NHÓM B (Tuần 35 - 37): Xét nghiệm dịch âm đạo sàng lọc khuẩn GBS để điều trị kháng sinh dự phòng khi sinh thường, tránh nhiễm trùng sơ sinh bé."
+        in 38..41 -> "📈 ĐO SẢN ĐỒ MONITORING (Tuần 38 - 41): Thực hiện Non-stress test định kỳ mỗi tuần để đánh giá nhịp tim thai và nhận diện cơn co tử cung chuyển dạ an toàn."
+        else -> null
     }
 }
 
@@ -493,6 +758,16 @@ fun TodayTab(
     onLaborAlertClick: () -> Unit,
     visibleWeeks: List<FetalWeekEntity>
 ) {
+    val biometrics = remember(weekData.weekNumber) { getFetalBiometrics(weekData.weekNumber) }
+    var selectedBiometric by remember(weekData.weekNumber) { mutableStateOf<BiometricIndicator?>(null) }
+    
+    // Set default selected biometric on first load
+    LaunchedEffect(biometrics) {
+        if (selectedBiometric == null || biometrics.none { it.acronym == selectedBiometric?.acronym }) {
+            selectedBiometric = biometrics.firstOrNull()
+        }
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -500,6 +775,63 @@ fun TodayTab(
         verticalArrangement = Arrangement.spacedBy(14.dp),
         contentPadding = PaddingValues(bottom = 24.dp, top = 10.dp)
     ) {
+        // Centered Big Week Header Banner (Always Centered & Yellow/Orange Highlighted for Milestones)
+        item {
+            val isGold = isGoldenWeek(weekData.weekNumber)
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 4.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isGold) Color(0xFFFFF2CC) else SoftPeachPrimary.copy(alpha = 0.25f)
+                ),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(
+                    width = 1.5.dp,
+                    color = if (isGold) Color(0xFFFFA500) else DeepBrownSecondary.copy(alpha = 0.3f)
+                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp, horizontal = 20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = if (isGold) "🩺 💛 MỐC KHÁM SẢN KHOA VÀNG QUAN TRỌNG 💛 🩺" else "🌸 THÔNG TIN SỨC KHỎE THAI NHI 🌸",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isGold) Color(0xFFD46B08) else DeepBrownSecondary,
+                        letterSpacing = 0.8.sp,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "TUẦN THỨ ${weekData.weekNumber}",
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = if (isGold) Color(0xFFD46B08) else DarkBrownText,
+                        textAlign = TextAlign.Center,
+                        letterSpacing = 0.5.sp
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = if (isGold) {
+                            "⚠️ Mốc khám thai định kỳ cực kỳ quan trọng! Mẹ bầu ghi nhớ đi kiểm tra, rà soát sức khỏe định kỳ nhé."
+                        } else {
+                            "Hành trình kỳ diệu hạnh phúc đồng hành cùng sự an lành lớn mạnh từng ngày của con 💕"
+                        },
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = if (isGold) Color(0xFF7F1D1D) else TextSlate,
+                        textAlign = TextAlign.Center,
+                        lineHeight = 16.sp,
+                        modifier = Modifier.padding(horizontal = 10.dp)
+                    )
+                }
+            }
+        }
+
         // Theme Selector Live-Toggle
         item {
             Card(
@@ -611,6 +943,253 @@ fun TodayTab(
                         Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                             MeasureWidget("Cân nặng", "${weekData.avgWeightG} g")
                             MeasureWidget("Chiều dài", "${weekData.avgLengthCm} cm")
+                        }
+                    }
+                }
+            }
+        }
+
+        // Dynamic Special Medical Scan Warnings
+        val specialTest = getWeekSpecialMedicalTests(weekData.weekNumber)
+        if (specialTest != null) {
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = AmberBg),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.2.dp, SoftPeachPrimary)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.Top,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(CircleShape)
+                                .background(DeepBrownSecondary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DateRange,
+                                contentDescription = "Mốc khám quan trọng",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Column {
+                            Text(
+                                text = "⭐ Lịch Xét Nghiệm Vàng Lớp Thai",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = DarkBrownText
+                            )
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(
+                                text = specialTest,
+                                fontSize = 12.sp,
+                                color = TextSlate,
+                                lineHeight = 18.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Fetal Biometrics WHO Grid Card
+        item {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = WhiteCard),
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(1.dp, LightBorder)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Star,
+                            contentDescription = null,
+                            tint = DeepBrownSecondary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Chỉ Số Sinh Trắc Bé Yêu (Mốc Tuần ${weekData.weekNumber})",
+                            fontSize = 13.5.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = DeepBrownSecondary
+                        )
+                    }
+                    Text(
+                        text = "Các chỉ số siêu âm tiêu chuẩn theo WHO. Bấm chọn chỉ số để xem phân tích chi tiết:",
+                        fontSize = 10.5.sp,
+                        color = TextMuted,
+                        lineHeight = 14.sp
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        val chunked = biometrics.chunked(3)
+                        chunked.forEach { rowItems ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                rowItems.forEach { bio ->
+                                    val isSelected = selectedBiometric?.acronym == bio.acronym
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(if (isSelected) SoftPeachPrimary.copy(alpha = 0.35f) else WarmBackground)
+                                            .border(
+                                                1.5.dp, 
+                                                if (isSelected) DeepBrownSecondary else LightBorder, 
+                                                RoundedCornerShape(10.dp)
+                                            )
+                                            .clickable { selectedBiometric = bio }
+                                            .padding(horizontal = 6.dp, vertical = 10.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text(
+                                                text = bio.acronym,
+                                                fontSize = 13.sp,
+                                                fontWeight = FontWeight.ExtraBold,
+                                                color = if (isSelected) DeepBrownSecondary else DarkBrownText
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = bio.value,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = TextSlate
+                                            )
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = when (bio.acronym) {
+                                                    "CRL" -> "KT đầu mông"
+                                                    "BPD" -> "ĐK lưỡng đỉnh"
+                                                    "FL" -> "Xương đùi (FL)"
+                                                    "HC" -> "Chu vi đầu (HC)"
+                                                    "AC" -> "Chu vi bụng (AC)"
+                                                    "FHR" -> "Nhịp tim (FHR)"
+                                                    "EFW" -> "Cân nặng ước"
+                                                    else -> bio.name
+                                                },
+                                                fontSize = 8.sp,
+                                                color = TextMuted,
+                                                textAlign = TextAlign.Center,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+                                if (rowItems.size < 3) {
+                                    repeat(3 - rowItems.size) {
+                                        Spacer(modifier = Modifier.weight(1f))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    selectedBiometric?.let { bio ->
+                        Spacer(modifier = Modifier.height(12.dp))
+                        HorizontalDivider(color = LightBorder, thickness = 0.5.dp)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = WarmBackground),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.Top,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(CircleShape)
+                                            .background(SoftPeachPrimary),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            text = when(bio.acronym) {
+                                                "CRL" -> "📏"
+                                                "BPD" -> "🧠"
+                                                "FL" -> "🦵"
+                                                "HC" -> "👶"
+                                                "AC" -> "🤰"
+                                                "FHR" -> "💓"
+                                                "EFW" -> "⚖️"
+                                                else -> "📊"
+                                            },
+                                            fontSize = 14.sp
+                                        )
+                                    }
+                                    Column {
+                                        Text(
+                                            text = "${bio.name} (${bio.acronym})",
+                                            fontSize = 12.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = DeepBrownSecondary
+                                        )
+                                        Text(
+                                            text = bio.description,
+                                            fontSize = 11.sp,
+                                            color = TextSlate,
+                                            lineHeight = 15.sp
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = "💡 Ý nghĩa y khoa:",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = DarkBrownText
+                                        )
+                                        Text(
+                                            text = bio.interpretation,
+                                            fontSize = 11.sp,
+                                            color = TextSlate,
+                                            lineHeight = 15.sp,
+                                            fontStyle = FontStyle.Italic
+                                        )
+                                    }
+                                }
+                                
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = "Phát triển",
+                                        fontSize = 9.sp,
+                                        color = TextMuted,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    LinearProgressIndicator(
+                                        progress = { bio.progress },
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(5.dp)
+                                            .clip(RoundedCornerShape(3.dp)),
+                                        color = DeepBrownSecondary,
+                                        trackColor = LightBorder
+                                    )
+                                    Text(
+                                        text = "${Math.round(bio.progress * 100)}%",
+                                        fontSize = 9.sp,
+                                        color = DeepBrownSecondary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -1058,333 +1637,336 @@ fun AppointmentsTab(
     var showAddDialog by remember { mutableStateOf(false) }
     var editingAppointment by remember { mutableStateOf<AppointmentEntity?>(null) }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(bottom = 90.dp, top = 10.dp)
-        ) {
-            // Gold checkup weeks overview
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = AmberBg),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, AlertBorder)
+    Column(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize().weight(1f)) {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    contentPadding = PaddingValues(bottom = 90.dp, top = 4.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "⭐ Lịch Trình Kiểm Tra Thai Mốc Vàng (WHO)",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = AmberText
-                        )
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            text = "• Tuần 6-8: Xác nhận thai vô tổ, siêu âm kích thước & kiểm tra tim thai sơ khởi.\n" +
-                                   "• Tuần 11-13: Khảo sát độ mờ da gáy NT phòng dị tật nhiễm sắc thể.\n" +
-                                   "• Tuần 20-24: Siêu âm 4D rà soát toàn bộ hình thái cơ quan của bé.\n" +
-                                   "• Tuần 24-28: Khám huyết áp & thử nghiệm pháp Glucose dung nạp tiểu đường.\n" +
-                                   "• Tuần 32: Đánh giá Doppler bánh nhau, nước ối và cân nặng bé.\n" +
-                                   "• Tuần 35-37+: Chạy Monitor tim thai NST đều đặn hàng tuần phòng biến chứng.",
-                            fontSize = 11.5.sp,
-                            color = AmberText,
-                            lineHeight = 17.sp
-                        )
-                    }
-                }
-            }
-
-            // Sync 9 standard medical milestones card
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = WarmPeachCard.copy(alpha = 0.5f)),
-                    shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(1.dp, LightBorder)
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Text(
-                            text = "🏥 Đồng Bộ 9 Mốc Khám Chuẩn Bộ Y Tế",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = DeepBrownSecondary
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = "Để đảm bảo đầy đủ các mốc khám thai quan trọng, mẹ bấm chọn nút dưới đây để hệ thống tự động lập sẵn lộ trình 9 mốc khám chuẩn Việt Nam chính xác tương ứng ngày dự sinh của mẹ nhé!",
-                            fontSize = 11.sp,
-                            color = TextSlate,
-                            lineHeight = 16.sp
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-                        OutlinedButton(
-                            onClick = { viewModel.resetToStandardMilestones() },
-                            border = BorderStroke(1.dp, DeepBrownSecondary.copy(alpha = 0.5f)),
-                            shape = RoundedCornerShape(8.dp),
+                    // Gold checkup weeks overview
+                    item {
+                        Card(
                             modifier = Modifier.fillMaxWidth(),
-                            contentPadding = PaddingValues(vertical = 4.dp)
+                            colors = CardDefaults.cardColors(containerColor = AmberBg),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, AlertBorder)
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Default.Refresh,
-                                    contentDescription = null,
-                                    tint = DeepBrownSecondary,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
+                            Column(modifier = Modifier.padding(16.dp)) {
                                 Text(
-                                    text = "Thiết lập lại 9 mốc khám Bộ Y Tế",
+                                    text = "⭐ Lịch Trình Kiểm Tra Thai Mốc Vàng (WHO)",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = AmberText
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = "• Tuần 6-8: Xác nhận thai vô tổ, siêu âm kích thước & kiểm tra tim thai sơ khởi.\n" +
+                                           "• Tuần 11-13: Khảo sát độ mờ da gáy NT phòng dị tật nhiễm sắc thể.\n" +
+                                           "• Tuần 20-24: Siêu âm 4D rà soát toàn bộ hình thái cơ quan của bé.\n" +
+                                           "• Tuần 24-28: Khám huyết áp & thử nghiệm pháp Glucose dung nạp tiểu đường.\n" +
+                                           "• Tuần 32: Đánh giá Doppler bánh nhau, nước ối và cân nặng bé.\n" +
+                                           "• Tuần 35-37+: Chạy Monitor tim thai NST đều đặn hàng tuần phòng biến chứng.",
                                     fontSize = 11.5.sp,
-                                    fontWeight = FontWeight.Bold,
+                                    color = AmberText,
+                                    lineHeight = 17.sp
+                                )
+                            }
+                        }
+                    }
+
+                    // Sync 9 standard medical milestones card
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = WarmPeachCard.copy(alpha = 0.5f)),
+                            shape = RoundedCornerShape(14.dp),
+                            border = BorderStroke(1.dp, LightBorder)
+                        ) {
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                Text(
+                                    text = "🏥 Đồng Bộ 9 Mốc Khám Chuẩn Bộ Y Tế",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.ExtraBold,
                                     color = DeepBrownSecondary
                                 )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Để đảm bảo đầy đủ các mốc khám thai quan trọng, mẹ bấm chọn nút dưới đây để hệ thống tự động lập sẵn lộ trình 9 mốc khám chuẩn Việt Nam chính xác tương ứng ngày dự sinh của mẹ nhé!",
+                                    fontSize = 11.sp,
+                                    color = TextSlate,
+                                    lineHeight = 16.sp
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                OutlinedButton(
+                                    onClick = { viewModel.resetToStandardMilestones() },
+                                    border = BorderStroke(1.dp, DeepBrownSecondary.copy(alpha = 0.5f)),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentPadding = PaddingValues(vertical = 4.dp)
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.Refresh,
+                                            contentDescription = null,
+                                            tint = DeepBrownSecondary,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "Thiết lập lại 9 mốc khám Bộ Y Tế",
+                                            fontSize = 11.5.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = DeepBrownSecondary
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
-                }
-            }
 
-            // Check if selected week is a golden week
-            if (isGoldenWeek(selectedWeek)) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = WarmPeachCard),
-                        shape = RoundedCornerShape(12.dp),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Info,
-                                contentDescription = "Mốc Vàng",
-                                tint = DarkBrownText,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "MỐC KHÁM SẢN KHOA VÀNG Ở TUẦN THẮT $selectedWeek! Vui lòng đặt hẹn ngay.",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = DarkBrownText
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Scheduled list Title
-            item {
-                Text(
-                    text = "🗒️ Danh Sách Lịch Hẹn Khám Thai Đã Lên",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    color = DeepBrownSecondary
-                )
-            }
-
-            if (allAppointments.isEmpty()) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = Color.White),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(1.dp, LightBorder)
-                    ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.DateRange,
-                                contentDescription = null,
-                                tint = TextMuted,
-                                modifier = Modifier.size(36.dp)
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Chưa có lịch hẹn khám nào được tạo.",
-                                color = TextMuted,
-                                fontSize = 12.sp
-                            )
-                            Text(
-                                text = "Bấm dấu + tròn bên dưới để thêm lịch hẹn khám thai định kỳ.",
-                                color = TextMuted,
-                                fontSize = 11.sp,
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                    }
-                }
-            } else {
-                items(allAppointments) { appt ->
-                    val isCompleted = appt.status == "COMPLETED"
-                    val isCritical = appt.isCritical
-
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(
-                            width = if (isCritical && !isCompleted) 1.5.dp else 1.dp,
-                            color = if (isCompleted) EmeraldText.copy(alpha = 0.3f)
-                            else if (isCritical) AlertBorder
-                            else LightBorder
-                        ),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (isCompleted) EmeraldBg.copy(alpha = 0.3f)
-                            else if (isCritical) WarmPeachCard.copy(alpha = 0.8f)
-                            else WhiteCard
-                        )
-                    ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
-                            // Header Row
-                            Row(
+                    // Check if selected week is a golden week
+                    if (isGoldenWeek(selectedWeek)) {
+                        item {
+                            Card(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF2CC)), // Soft bright warning yellow
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.2.dp, Color(0xFFFFA500)) // Warning Orange border
                             ) {
                                 Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Icon(
-                                        imageVector = if (isCritical) Icons.Default.Star else Icons.Default.DateRange,
-                                        contentDescription = null,
-                                        tint = if (isCompleted) EmeraldText else if (isCritical) AmberText else DeepBrownSecondary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = "Tuần thai ${appt.targetWeek} • Ngày ${appt.scheduledDate}",
-                                        fontWeight = FontWeight.Bold,
-                                        fontSize = 13.sp,
-                                        color = if (isCompleted) EmeraldText else DeepBrownSecondary
-                                    )
-                                }
-
-                                // Mark completed circle icon
-                                IconButton(
-                                    onClick = { viewModel.toggleAppointmentStatus(appt) },
-                                    modifier = Modifier.minimumInteractiveComponentSize()
-                                ) {
-                                    Icon(
-                                        imageVector = if (isCompleted) Icons.Default.CheckCircle else Icons.Default.Check,
-                                        tint = if (isCompleted) EmeraldText else TextMuted,
-                                        contentDescription = "Tích hoàn thành khám thai",
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(6.dp))
-
-                            if (appt.clinicName != null) {
-                                Text(
-                                    text = "🏥 Phòng Khám: ${appt.clinicName}",
-                                    fontSize = 12.sp,
-                                    color = if (isCompleted) EmeraldText.copy(alpha = 0.8f) else TextSlate
-                                )
-                            }
-                            if (appt.doctorName != null) {
-                                Text(
-                                    text = "🧑‍⚕️ Bác sĩ: ${appt.doctorName}",
-                                    fontSize = 12.sp,
-                                    color = if (isCompleted) EmeraldText.copy(alpha = 0.8f) else TextSlate
-                                )
-                            }
-                            if (appt.medicalNotes != null) {
-                                Text(
-                                    text = "📝 Chỉ định dặn: \"${appt.medicalNotes}\"",
-                                    fontSize = 12.sp,
-                                    color = if (isCompleted) EmeraldText.copy(alpha = 0.6f) else TextMuted
-                                )
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            Row(
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                // Status Badge
-                                Card(
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = if (isCompleted) EmeraldText.copy(alpha = 0.1f) else AmberBg
-                                    )
-                                ) {
-                                    Text(
-                                        text = if (isCompleted) "✓ ĐÃ KHÁM SẢN" else "⚡ CHỜ HẸN KHÁM",
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                        color = if (isCompleted) EmeraldText else AmberText
-                                    )
-                                }
-
-                                // Actions row (Edit, Delete)
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.padding(12.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    // Edit button
-                                    IconButton(
-                                        onClick = { editingAppointment = appt },
+                                    Icon(
+                                        imageVector = Icons.Default.Info,
+                                        contentDescription = "Mốc Vàng",
+                                        tint = Color(0xFFD46B08), // Dark warning orange
                                         modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "MỐC KHÁM SẢN KHOA VÀNG QUAN TRỌNG Ở TUẦN THÚ $selectedWeek! Mẹ bầu ghi nhớ đặt và đi khám nhé.",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF7F1D1D)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Scheduled list Title
+                    item {
+                        Text(
+                            text = "🗒️ Danh Sách Lịch Hẹn Khám Thai Đã Lên",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp,
+                            color = DeepBrownSecondary
+                        )
+                    }
+
+                    if (allAppointments.isEmpty()) {
+                        item {
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, LightBorder)
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.DateRange,
+                                        contentDescription = null,
+                                        tint = TextMuted,
+                                        modifier = Modifier.size(36.dp)
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = "Chưa có lịch hẹn khám nào được tạo.",
+                                        color = TextMuted,
+                                        fontSize = 12.sp
+                                    )
+                                    Text(
+                                        text = "Bấm dấu + tròn bên dưới để thêm lịch hẹn khám thai định kỳ.",
+                                        color = TextMuted,
+                                        fontSize = 11.sp,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        items(allAppointments, key = { it.id }) { appt ->
+                            val isCompleted = appt.status == "COMPLETED"
+                            val isCritical = appt.isCritical
+
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                                border = BorderStroke(
+                                    width = if (isCritical && !isCompleted) 1.5.dp else 1.dp,
+                                    color = if (isCompleted) EmeraldText.copy(alpha = 0.3f)
+                                    else if (isCritical) AlertBorder
+                                    else LightBorder
+                                ),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isCompleted) EmeraldBg.copy(alpha = 0.3f)
+                                    else if (isCritical) WarmPeachCard.copy(alpha = 0.8f)
+                                    else WhiteCard
+                                )
+                            ) {
+                                Column(modifier = Modifier.padding(14.dp)) {
+                                    // Header Row
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Edit,
-                                            contentDescription = "Sửa lịch trình",
-                                            tint = DeepBrownSecondary.copy(alpha = 0.8f),
-                                            modifier = Modifier.size(16.dp)
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Icon(
+                                                imageVector = if (isCritical) Icons.Default.Star else Icons.Default.DateRange,
+                                                contentDescription = null,
+                                                tint = if (isCompleted) EmeraldText else if (isCritical) AmberText else DeepBrownSecondary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "Tuần thai ${appt.targetWeek} • Ngày ${appt.scheduledDate}",
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp,
+                                                color = if (isCompleted) EmeraldText else DeepBrownSecondary
+                                            )
+                                        }
+
+                                        // Mark completed circle icon
+                                        IconButton(
+                                            onClick = { viewModel.toggleAppointmentStatus(appt) },
+                                            modifier = Modifier.minimumInteractiveComponentSize()
+                                        ) {
+                                            Icon(
+                                                imageVector = if (isCompleted) Icons.Default.CheckCircle else Icons.Default.Check,
+                                                tint = if (isCompleted) EmeraldText else TextMuted,
+                                                contentDescription = "Tích hoàn thành khám thai",
+                                                modifier = Modifier.size(24.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                    if (appt.clinicName != null) {
+                                        Text(
+                                            text = "🏥 Phòng Khám: ${appt.clinicName}",
+                                            fontSize = 12.sp,
+                                            color = if (isCompleted) EmeraldText.copy(alpha = 0.8f) else TextSlate
+                                        )
+                                    }
+                                    if (appt.doctorName != null) {
+                                        Text(
+                                            text = "🧑‍⚕️ Bác sĩ: ${appt.doctorName}",
+                                            fontSize = 12.sp,
+                                            color = if (isCompleted) EmeraldText.copy(alpha = 0.8f) else TextSlate
+                                        )
+                                    }
+                                    if (appt.medicalNotes != null) {
+                                        Text(
+                                            text = "📝 Chỉ định dặn: \"${appt.medicalNotes}\"",
+                                            fontSize = 12.sp,
+                                            color = if (isCompleted) EmeraldText.copy(alpha = 0.6f) else TextMuted
                                         )
                                     }
 
-                                    // Delete button
-                                    IconButton(
-                                        onClick = { viewModel.deleteAppointment(appt.id) },
-                                        modifier = Modifier.size(20.dp)
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    Row(
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Delete,
-                                            contentDescription = "Xóa lịch trình",
-                                            tint = AlertRed.copy(alpha = 0.5f),
-                                            modifier = Modifier.size(16.dp)
-                                        )
+                                        // Status Badge
+                                        Card(
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = if (isCompleted) EmeraldText.copy(alpha = 0.1f) else AmberBg
+                                            )
+                                        ) {
+                                            Text(
+                                                text = if (isCompleted) "✓ ĐÃ KHÁM SẢN" else "⚡ CHỜ HẸN KHÁM",
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                                color = if (isCompleted) EmeraldText else AmberText
+                                            )
+                                        }
+
+                                        // Actions row (Edit, Delete)
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            // Edit button
+                                            IconButton(
+                                                onClick = { editingAppointment = appt },
+                                                modifier = Modifier.size(20.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Edit,
+                                                    contentDescription = "Sửa lịch trình",
+                                                    tint = DeepBrownSecondary.copy(alpha = 0.8f),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+
+                                            // Delete button
+                                            IconButton(
+                                                onClick = { viewModel.deleteAppointment(appt.id) },
+                                                modifier = Modifier.size(20.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Delete,
+                                                    contentDescription = "Xóa lịch trình",
+                                                    tint = AlertRed.copy(alpha = 0.5f),
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
+
+                // Circular Add Floating Action Button (+) centered bottom right
+                FloatingActionButton(
+                    onClick = { showAddDialog = true },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(bottom = 20.dp, end = 20.dp)
+                        .testTag("fab_add_appointment"),
+                    containerColor = DeepBrownSecondary,
+                    contentColor = Color.White,
+                    shape = CircleShape
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Thêm lịch hẹn khám mới",
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
         }
 
-        // Circular Add Floating Action Button (+) centered bottom right
-        FloatingActionButton(
-            onClick = { showAddDialog = true },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(bottom = 20.dp, end = 20.dp)
-                .testTag("fab_add_appointment"),
-            containerColor = DeepBrownSecondary,
-            contentColor = Color.White,
-            shape = CircleShape
-        ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = "Thêm lịch hẹn khám mới",
-                modifier = Modifier.size(24.dp)
-            )
-        }
-    }
-
-    // Add Appointment dialog popup
+        // Add Appointment dialog popup
     if (showAddDialog) {
         var addClinicVal by remember { mutableStateOf("") }
         var addDoctorVal by remember { mutableStateOf("") }
@@ -2156,566 +2738,1084 @@ fun ReminderScheduleCard(
 }
 
 @Composable
-fun ProfileTab(
+fun SettingsDrawerContent(
     viewModel: PregnancyViewModel,
     user: UserEntity,
-    allWeightRecords: List<WeightRecordEntity>
+    onClose: () -> Unit
 ) {
     val focusManager = LocalFocusManager.current
-    var name by remember { mutableStateOf(user.name) }
-    var lmpDate by remember { mutableStateOf(user.lmpDate ?: "2026-01-15") }
-    var eddDate by remember { mutableStateOf(user.eddDate ?: "2026-10-22") }
-    var dobDate by remember { mutableStateOf(user.dobDate ?: "1998-05-15") }
-    var conceptionDate by remember { mutableStateOf(user.conceptionDate ?: "2026-01-29") }
-    var startWeightKg by remember { mutableStateOf(user.gestationStartWeight.toString()) }
-    var targetWeightKg by remember { mutableStateOf(user.targetPregnancyWeight.toString()) }
+    var name by remember(user) { mutableStateOf(user.name) }
+    var lmpDate by remember(user) { mutableStateOf(user.lmpDate ?: "2026-01-15") }
+    var eddDate by remember(user) { mutableStateOf(user.eddDate ?: "2026-10-22") }
+    var dobDate by remember(user) { mutableStateOf(user.dobDate ?: "1998-05-15") }
+    var conceptionDate by remember(user) { mutableStateOf(user.conceptionDate ?: "2026-01-29") }
+    var startWeightKg by remember(user) { mutableStateOf(user.gestationStartWeight.toString()) }
+    var targetWeightKg by remember(user) { mutableStateOf(user.targetPregnancyWeight.toString()) }
 
-    var subTabSelected by remember { mutableStateOf(0) } // 0: Hồ Sơ & Ngày Chu Kỳ, 1: Nhật Ký Cân Nặng
+    var isEditing by remember { mutableStateOf(false) }
+    var activeSubMenu by remember { mutableStateOf<Int?>(0) } // 0: Hồ Sơ, 1: Cân Nặng, 2: Thiết Lập & Giới Thiệu
 
-    // For new weight record input
+    // For new weight record input inside weight tracking submenu
+    val allWeightRecords by viewModel.allWeightRecordsState.collectAsStateWithLifecycle()
     var newWeightStr by remember { mutableStateOf("") }
     var newWeightWeekStr by remember { mutableStateOf(viewModel.selectedWeek.value.toString()) }
     var newWeightNotes by remember { mutableStateOf("") }
 
     val daysLeft = viewModel.getDaysLeftToDue(user.eddDate)
     val progressPercent = ((280 - daysLeft).coerceIn(0, 280).toFloat() / 280f * 100f).toInt()
+    val gestationWeek = ((280 - daysLeft).coerceIn(0, 280) / 7 + 1).coerceIn(1, 40)
 
-    LazyColumn(
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
-        contentPadding = PaddingValues(bottom = 24.dp, top = 10.dp)
+            .background(WarmBackground)
+            .statusBarsPadding()
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Active account info & Logout
-        item {
-            Card(
+        // 🌸 Header & Brand Section
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .clip(CircleShape)
+                        .background(Brush.radialGradient(listOf(SoftPeachPrimary, WarmPeachCard))),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Face,
+                        contentDescription = null,
+                        tint = DeepBrownSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Column {
+                    Text(
+                        text = "Tiện ích mở rộng",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = TextMuted,
+                        letterSpacing = 0.5.sp
+                    )
+                    Text(
+                        text = "Cẩm nang cho Mẹ",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = DarkBrownText
+                    )
+                }
+            }
+            IconButton(
+                onClick = onClose,
+                modifier = Modifier
+                    .background(LightBorder, CircleShape)
+                    .size(32.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close, 
+                    contentDescription = "Đóng menu", 
+                    tint = DarkBrownText,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+
+        // 👑 Beautiful Integrated Profile Header
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = WhiteCard),
+            shape = RoundedCornerShape(20.dp),
+            border = BorderStroke(1.dp, LightBorder)
+        ) {
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                colors = CardDefaults.cardColors(containerColor = WhiteCard),
-                shape = RoundedCornerShape(16.dp),
-                border = BorderStroke(1.dp, LightBorder)
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Row(
-                    modifier = Modifier.padding(14.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Modern styled Avatar
+                    Box(
+                        modifier = Modifier
+                            .size(54.dp)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(
+                                        SoftPeachPrimary,
+                                        WarmPeachCard
+                                    )
+                                )
+                            )
+                            .border(2.dp, WhiteCard, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (user.name.isNotBlank()) user.name.take(2).uppercase() else "ME",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = DarkBrownText
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Chào Mẹ Bầu,",
+                            fontSize = 12.sp,
+                            color = TextMuted
+                        )
+                        Text(
+                            text = user.name.ifBlank { "Mẹ bầu thông thái" },
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = DarkBrownText,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(top = 2.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .background(EmeraldBg)
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "Tuần thai ${gestationWeek}",
+                                    fontSize = 9.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = EmeraldText
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Còn ${daysLeft} ngày dự sinh",
+                                fontSize = 9.5.sp,
+                                color = TextMuted
+                            )
+                        }
+                    }
+                }
+
+                HorizontalDivider(color = LightBorder, thickness = 0.5.dp)
+
+                // Account & Logout details
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(38.dp)
-                                .clip(CircleShape)
-                                .background(SoftPeachPrimary.copy(alpha = 0.5f)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.AccountCircle,
-                                contentDescription = "Active user",
-                                tint = DeepBrownSecondary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                        }
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(text = "Tài khoản đang đăng nhập", fontSize = 10.sp, color = TextMuted)
-                            Text(
-                                text = viewModel.loggedInEmail.value,
-                                fontSize = 12.5.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = DeepBrownSecondary,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(text = "Tài khoản", fontSize = 8.5.sp, color = TextMuted)
+                        Text(
+                            text = viewModel.loggedInEmail.value,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = TextSlate,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
+                    
                     Button(
                         onClick = { viewModel.logout() },
-                        colors = ButtonDefaults.buttonColors(containerColor = AlertRed),
-                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = AlertLightBg),
+                        shape = RoundedCornerShape(10.dp),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
-                        modifier = Modifier.height(30.dp)
+                        modifier = Modifier.height(30.dp),
+                        border = BorderStroke(0.5.dp, AlertBorder)
                     ) {
-                        Text("Đăng xuất", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Icon(
+                            imageVector = Icons.Default.ExitToApp,
+                            contentDescription = "Đăng xuất",
+                            tint = AlertRed,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Đăng xuất",
+                            color = AlertRed,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
         }
 
-        // Toggle Buttons subTabSelected
-        item {
-            Row(
+        // 📊 Gestation Progress Panel
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = WarmPeachCard.copy(alpha = 0.7f)),
+            shape = RoundedCornerShape(20.dp),
+            border = BorderStroke(1.dp, LightBorder)
+        ) {
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    .padding(14.dp)
             ) {
-                Button(
-                    onClick = { subTabSelected = 0 },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (subTabSelected == 0) DeepBrownSecondary else WhiteCard,
-                        contentColor = if (subTabSelected == 0) Color.White else TextSlate
-                    ),
-                    modifier = Modifier.weight(1f).border(1.dp, LightBorder, RoundedCornerShape(12.dp)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("⚙️ Hồ Sơ Thai Kỳ", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-                Button(
-                    onClick = { subTabSelected = 1 },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (subTabSelected == 1) DeepBrownSecondary else WhiteCard,
-                        contentColor = if (subTabSelected == 1) Color.White else TextSlate
-                    ),
-                    modifier = Modifier.weight(1f).border(1.dp, LightBorder, RoundedCornerShape(12.dp)),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("⚖️ Theo Dõi Cân Nặng (${allWeightRecords.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-
-        if (subTabSelected == 0) {
-            // Pregnancy Progress Dashboard
-            item {
-                Card(
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = WarmPeachCard),
-                    shape = RoundedCornerShape(18.dp),
-                    border = BorderStroke(1.dp, LightBorder)
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(modifier = Modifier.padding(18.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.DateRange,
+                            contentDescription = null,
+                            tint = DeepBrownSecondary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = "📊 Báo Cáo Hành Trình Chín Tháng Mười Ngày",
-                            fontSize = 13.sp,
+                            text = "Tiến độ thai kỳ",
+                            fontSize = 11.sp,
                             fontWeight = FontWeight.Bold,
                             color = DarkBrownText
                         )
-                        Spacer(modifier = Modifier.height(11.dp))
-
-                        Text(
-                            text = "Còn lại $daysLeft Ngày để gặp bé cục vàng cưng!",
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = DeepBrownSecondary
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        LinearProgressIndicator(
-                            progress = { progressPercent / 100f },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(8.dp)
-                                .clip(RoundedCornerShape(4.dp)),
-                            color = DeepBrownSecondary,
-                            trackColor = Color.White
-                        )
-
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Row(
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(text = "Tuần 1", fontSize = 10.sp, color = DarkBrownText)
-                            Text(text = "Đã hoàn thành $progressPercent%", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = DeepBrownSecondary)
-                            Text(text = "Tuần 40", fontSize = 10.sp, color = DarkBrownText)
-                        }
                     }
+                    Text(
+                        text = "$progressPercent% hành trình",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = DeepBrownSecondary
+                    )
                 }
-            }
 
-            // Edit Profile Form
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = WhiteCard),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, LightBorder)
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Beautifully designed Progress Meter
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(10.dp)
+                        .clip(CircleShape)
+                        .background(WhiteCard)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "⚙️ Thiết Lập Hồ Sơ & Ngày Quan Trọng",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = DeepBrownSecondary
-                        )
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = AmberBg.copy(alpha = 0.5f)),
-                            shape = RoundedCornerShape(10.dp),
-                            border = BorderStroke(0.5.dp, AmberText.copy(alpha = 0.3f))
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Info,
-                                    contentDescription = "Gợi ý",
-                                    tint = AmberText,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "Mẹ chỉ cần nhập 1 trong 3 mốc (LMP, EDD hoặc Ngày thụ thai), hệ thống sẽ tự động ước tính chính xác 2 mốc còn lại!",
-                                    fontSize = 11.sp,
-                                    color = DarkBrownText,
-                                    lineHeight = 15.sp
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        PregnancyTextField(
-                            value = name,
-                            onValueChange = { name = it },
-                            label = "Họ và Tên Mẹ bầu",
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        PregnancyDatePickerField(
-                            label = "Ngày sinh của Mẹ",
-                            currentDateYmd = dobDate,
-                            onDateSelected = { dobDate = it },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        PregnancyDatePickerField(
-                            label = "Ngày đầu kỳ kinh cuối (LMP)",
-                            currentDateYmd = lmpDate,
-                            onDateSelected = { selectedDate ->
-                                lmpDate = selectedDate
-                                viewModel.estimateDatesFromLMP(selectedDate.trim())?.let { pair ->
-                                    eddDate = pair.first
-                                    conceptionDate = pair.second
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        PregnancyDatePickerField(
-                            label = "Ngày bác sĩ dự sinh (EDD)",
-                            currentDateYmd = eddDate,
-                            onDateSelected = { selectedDate ->
-                                eddDate = selectedDate
-                                viewModel.estimateDatesFromEDD(selectedDate.trim())?.let { pair ->
-                                    lmpDate = pair.first
-                                    conceptionDate = pair.second
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        PregnancyDatePickerField(
-                            label = "Ngày thụ thai chính thức",
-                            currentDateYmd = conceptionDate,
-                            onDateSelected = { selectedDate ->
-                                conceptionDate = selectedDate
-                                viewModel.estimateDatesFromConception(selectedDate.trim())?.let { pair ->
-                                    lmpDate = pair.first
-                                    eddDate = pair.second
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        PregnancyTextField(
-                            value = startWeightKg,
-                            onValueChange = { startWeightKg = it },
-                            label = "Cân nặng trước thai kỳ (kg)",
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        PregnancyTextField(
-                            value = targetWeightKg,
-                            onValueChange = { targetWeightKg = it },
-                            label = "Mục tiêu cân nặng khi sinh (kg)",
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(modifier = Modifier.height(14.dp))
-
-                        LiquidGlassButton(
-                            onClick = {
-                                if (name.isNotBlank()) {
-                                    val swValue = startWeightKg.toDoubleOrNull() ?: user.gestationStartWeight
-                                    val twValue = targetWeightKg.toDoubleOrNull() ?: user.targetPregnancyWeight
-                                    viewModel.updateProfile(
-                                        name = name, 
-                                        lmp = lmpDate, 
-                                        edd = eddDate,
-                                        dob = dobDate,
-                                        conception = conceptionDate,
-                                        startWeight = swValue,
-                                        targetWeight = twValue
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(fraction = progressPercent / 100f)
+                            .clip(CircleShape)
+                            .background(
+                                Brush.horizontalGradient(
+                                    colors = listOf(
+                                        SoftPeachPrimary,
+                                        DeepBrownSecondary
                                     )
-                                    focusManager.clearFocus()
-                                }
-                            },
-                            modifier = Modifier
-                                .testTag("save_profile_btn")
-                                .fillMaxWidth()
-                        ) {
-                            Icon(imageVector = Icons.Default.Settings, contentDescription = null, tint = Color.White)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Cập Nhật Thiết Lập Hồ Sơ", color = Color.White, fontWeight = FontWeight.Bold)
-                        }
-                    }
+                                )
+                            )
+                    )
                 }
-            }
-        } else {
-            // WEIGHT TRACKER SUB-TAB
-            // A. STATS BAR CARD
-            item {
-                val latestRecord = allWeightRecords.maxByOrNull { it.weekNumber }
-                val currentW = latestRecord?.weightKg ?: user.gestationStartWeight
-                val diffW = currentW - user.gestationStartWeight
-                val targetGain = user.targetPregnancyWeight - user.gestationStartWeight
-                
-                Card(
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = SoftPeachPrimary.copy(alpha=0.3f)),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, LightBorder)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Box(modifier = Modifier.fillMaxWidth()) {
-                        WavyBackgroundAccent(modifier = Modifier.matchParentSize().alpha(0.15f), color = DeepBrownSecondary)
-                        Column(modifier = Modifier.padding(18.dp)) {
-                            Text(
-                                text = "⚖️ Phân Tích Chỉ Số Cân Nặng Thai Kỳ",
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = DeepBrownSecondary
-                            )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("Bắt đầu", fontSize = 10.sp, color = TextMuted)
-                                    Text("${user.gestationStartWeight}kg", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = DarkBrownText)
-                                }
-                                Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("Hiện tại", fontSize = 10.sp, color = TextMuted)
-                                    Text("${currentW}kg", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = DeepBrownSecondary)
-                                }
-                                Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("Đã tăng", fontSize = 10.sp, color = TextMuted)
-                                    Text(
-                                        text = if (diffW >= 0) "+${String.format(Locale.US, "%.1f", diffW)}kg" else "${String.format(Locale.US, "%.1f", diffW)}kg", 
-                                        fontSize = 15.sp, 
-                                        fontWeight = FontWeight.Bold, 
-                                        color = if (diffW > targetGain) AlertRed else EmeraldText
-                                    )
-                                }
-                                Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("Mục tiêu tăng", fontSize = 10.sp, color = TextMuted)
-                                    Text("+${String.format(Locale.US, "%.1f", targetGain)}kg", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = DarkBrownText)
-                                }
-                            }
-                            
-                            Spacer(modifier = Modifier.height(12.dp))
-                            val isGainHealthy = diffW in (1.0..16.0)
-                            Text(
-                                text = if (isGainHealthy) 
-                                    "✓ Mẹ có mức tăng cân ổn định theo mốc tuần thai lý tưởng. Hãy duy trì chế độ dinh dưỡng bồi sữa để dưỡng nhi vững vàng mẹ nhé!" 
-                                    else "💡 Mẹ nên đặt mục tiêu tăng từ 11.5kg - 16.0kg suốt hành trình thai kỳ để đảm bảo dinh dưỡng vàng tốt nhất cho sự nở nang của bánh nhau.",
-                                fontSize = 11.sp,
-                                color = TextSlate,
-                                lineHeight = 16.sp,
-                                fontStyle = FontStyle.Italic
-                            )
-                        }
-                    }
+                    Text(
+                        text = "Khởi đầu", 
+                        fontSize = 9.sp, 
+                        color = TextMuted,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        text = "Đã đi qua ${(280 - daysLeft).coerceIn(0, 280)} ngày", 
+                        fontSize = 9.sp, 
+                        color = DarkBrownText,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Về đích", 
+                        fontSize = 9.sp, 
+                        color = TextMuted,
+                        fontWeight = FontWeight.Medium
+                    )
                 }
             }
+        }
 
-            // B. CUSTOM LINE CHART VIEW
-            item {
-                WeightProgressionChart(
-                    records = allWeightRecords,
-                    startWeight = user.gestationStartWeight,
-                    targetWeight = user.targetPregnancyWeight
-                )
-            }
+        // 📂 EXPANDABLE SECTIONS CONTROLLER
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
-            // C. LOG WEIGHT RECORD FORM
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = WhiteCard),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, LightBorder)
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "✍️ Ghi Nhận Chỉ Số Cân Nặng",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = DeepBrownSecondary
-                        )
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = newWeightWeekStr,
-                                onValueChange = { newWeightWeekStr = it },
-                                label = { Text("Tuần thai (1-41)") },
-                                modifier = Modifier.weight(1f),
-                                singleLine = true
-                            )
-                            OutlinedTextField(
-                                value = newWeightStr,
-                                onValueChange = { newWeightStr = it },
-                                label = { Text("Cân nặng (kg)") },
-                                modifier = Modifier.weight(1.2f),
-                                singleLine = true
-                            )
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        OutlinedTextField(
-                            value = newWeightNotes,
-                            onValueChange = { newWeightNotes = it },
-                            label = { Text("Ghi chú thể chất (Ví dụ: Ổn định, mệt mỏi...)") },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Button(
-                            onClick = {
-                                val wk = newWeightWeekStr.toIntOrNull()?.coerceIn(1, 41)
-                                val wt = newWeightStr.toDoubleOrNull()
-                                if (wk != null && wt != null) {
-                                    viewModel.addOrUpdateWeight(wk, wt, newWeightNotes)
-                                    newWeightStr = ""
-                                    newWeightNotes = ""
-                                    focusManager.clearFocus()
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = DeepBrownSecondary),
-                            shape = RoundedCornerShape(10.dp)
-                        ) {
-                            Icon(imageVector = Icons.Default.Add, contentDescription = null)
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Báo Cáo Cân Nặng Tuần", color = Color.White)
-                        }
-                    }
-                }
-            }
-
-            // D. HISTORY RECALL LOG ITEMS
-            if (allWeightRecords.isEmpty()) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = WarmBackground),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(
-                            text = "Chưa có chỉ ghi nhận cân nặng nào được cập nhật. Hãy khai báo tuần đầu tiên để vẽ đường biểu đồ chỉ số nhé mẹ!",
-                            modifier = Modifier.padding(16.dp),
-                            fontSize = 11.sp,
-                            color = TextMuted,
-                            textAlign = TextAlign.Center
-                        )
-                    }
-                }
-            } else {
-                val sortedList = allWeightRecords.sortedByDescending { it.weekNumber }
-                items(sortedList) { rec ->
-                    val diff = rec.weightKg - user.gestationStartWeight
-                    Card(
+            // ================= SUBMENU 1: HỒ SƠ THAI KỲ & NGÀY CHU KỲ =================
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = WhiteCard),
+                shape = RoundedCornerShape(18.dp),
+                border = BorderStroke(1.dp, LightBorder)
+            ) {
+                Column {
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 2.dp),
-                        colors = CardDefaults.cardColors(containerColor = WhiteCard),
-                        shape = RoundedCornerShape(12.dp),
-                        border = BorderStroke(0.5.dp, LightBorder.copy(alpha=0.6f))
+                            .clickable { activeSubMenu = if (activeSubMenu == 0) null else 0 }
+                            .padding(horizontal = 14.dp, vertical = 14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .clip(RoundedCornerShape(6.dp))
-                                            .background(SoftPeachPrimary.copy(alpha = 0.4f))
-                                            .padding(horizontal = 7.dp, vertical = 2.dp)
-                                    ) {
-                                        Text(
-                                            text = "Tuần thai ${rec.weekNumber}",
-                                            fontSize = 11.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = DeepBrownSecondary
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = rec.dateRecorded ?: "",
-                                        fontSize = 10.sp,
-                                        color = TextMuted
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    text = "Ghi nhận: " + rec.notes,
-                                    fontSize = 12.sp,
-                                    color = TextSlate,
-                                    fontStyle = FontStyle.Italic
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(30.dp)
+                                    .clip(CircleShape)
+                                    .background(SoftPeachPrimary.copy(alpha = 0.4f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = null,
+                                    tint = DeepBrownSecondary,
+                                    modifier = Modifier.size(15.dp)
                                 )
                             }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "Hồ sơ & Ngày chu kỳ",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = DarkBrownText
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = DeepBrownSecondary,
+                            modifier = Modifier
+                                .graphicsLayer { rotationZ = if (activeSubMenu == 0) 180f else 0f }
+                                .size(18.dp)
+                        )
+                    }
+
+                    AnimatedVisibility(
+                        visible = activeSubMenu == 0,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        Column {
+                            HorizontalDivider(color = LightBorder, thickness = 0.5.dp)
+                            Column(modifier = Modifier.padding(14.dp)) {
+                                if (!isEditing) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        ProfileInfoRow(
+                                            icon = Icons.Default.Person,
+                                            label = "Họ và tên Mẹ",
+                                            value = user.name
+                                        )
+                                        ProfileInfoRow(
+                                            icon = Icons.Default.DateRange,
+                                            label = "Ngày sinh của Mẹ",
+                                            value = user.dobDate ?: "Chưa thiết lập"
+                                        )
+                                        ProfileInfoRow(
+                                            icon = Icons.Default.DateRange,
+                                            label = "Kỳ kinh cuối (LMP)",
+                                            value = user.lmpDate ?: "Chưa thiết lập"
+                                        )
+                                        ProfileInfoRow(
+                                            icon = Icons.Default.DateRange,
+                                            label = "Ngày dự kiến sinh (EDD)",
+                                            value = user.eddDate ?: "Chưa thiết lập"
+                                        )
+                                        ProfileInfoRow(
+                                            icon = Icons.Default.DateRange,
+                                            label = "Ngày thụ thai",
+                                            value = user.conceptionDate ?: "Chưa thiết lập"
+                                        )
+                                        ProfileInfoRow(
+                                            icon = Icons.Default.Settings,
+                                            label = "Cân nặng trước bầu",
+                                            value = "${user.gestationStartWeight} kg"
+                                        )
+                                        ProfileInfoRow(
+                                            icon = Icons.Default.Star,
+                                            label = "Mục tiêu cân nặng",
+                                            value = "${user.targetPregnancyWeight} kg"
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(14.dp))
+
+                                    Button(
+                                        onClick = { isEditing = true },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(38.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = DeepBrownSecondary),
+                                        shape = RoundedCornerShape(10.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Edit,
+                                            contentDescription = null,
+                                            tint = Color.White,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "Chỉnh sửa hồ sơ thai kỳ",
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                } else {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text(
+                                            text = "⚙️ Thay Đổi Thiết Lập Ngày Quan Trọng",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = DarkBrownText
+                                        )
+
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = CardDefaults.cardColors(containerColor = AmberBg.copy(alpha = 0.5f)),
+                                            shape = RoundedCornerShape(10.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(10.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Info,
+                                                    contentDescription = "Gợi ý",
+                                                    tint = AmberText,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(
+                                                    text = "Mẹ nhập 1 trong 3 mốc (LMP, EDD, thụ thai), hệ thống sẽ tự động đồng bộ ước tính các mốc ngày còn lại.",
+                                                    fontSize = 10.sp,
+                                                    color = DarkBrownText,
+                                                    lineHeight = 14.sp
+                                                )
+                                            }
+                                        }
+
+                                        PregnancyTextField(
+                                            value = name,
+                                            onValueChange = { name = it },
+                                            label = "Họ và Tên Mẹ bầu",
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        PregnancyDatePickerField(
+                                            label = "Ngày sinh của Mẹ",
+                                            currentDateYmd = dobDate,
+                                            onDateSelected = { dobDate = it },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        PregnancyDatePickerField(
+                                            label = "Ngày kỳ kinh cuối (LMP)",
+                                            currentDateYmd = lmpDate,
+                                            onDateSelected = { selectedDate ->
+                                                lmpDate = selectedDate
+                                                viewModel.estimateDatesFromLMP(selectedDate.trim())?.let { pair ->
+                                                    eddDate = pair.first
+                                                    conceptionDate = pair.second
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        PregnancyDatePickerField(
+                                            label = "Ngày bác sĩ dự sinh (EDD)",
+                                            currentDateYmd = eddDate,
+                                            onDateSelected = { selectedDate ->
+                                                eddDate = selectedDate
+                                                viewModel.estimateDatesFromEDD(selectedDate.trim())?.let { pair ->
+                                                    lmpDate = pair.first
+                                                    conceptionDate = pair.second
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        PregnancyDatePickerField(
+                                            label = "Ngày thụ thai chính thức",
+                                            currentDateYmd = conceptionDate,
+                                            onDateSelected = { selectedDate ->
+                                                conceptionDate = selectedDate
+                                                viewModel.estimateDatesFromConception(selectedDate.trim())?.let { pair ->
+                                                    lmpDate = pair.first
+                                                    eddDate = pair.second
+                                                }
+                                            },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        PregnancyTextField(
+                                            value = startWeightKg,
+                                            onValueChange = { startWeightKg = it },
+                                            label = "Cân nặng trước thai kỳ (kg)",
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        PregnancyTextField(
+                                            value = targetWeightKg,
+                                            onValueChange = { targetWeightKg = it },
+                                            label = "Mục tiêu cân nặng khi sinh (kg)",
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        Spacer(modifier = Modifier.height(4.dp))
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            OutlinedButton(
+                                                onClick = {
+                                                    name = user.name
+                                                    lmpDate = user.lmpDate ?: "2026-01-15"
+                                                    eddDate = user.eddDate ?: "2026-10-22"
+                                                    dobDate = user.dobDate ?: "1998-05-15"
+                                                    conceptionDate = user.conceptionDate ?: "2026-01-29"
+                                                    startWeightKg = user.gestationStartWeight.toString()
+                                                    targetWeightKg = user.targetPregnancyWeight.toString()
+                                                    isEditing = false
+                                                    focusManager.clearFocus()
+                                                },
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .height(36.dp),
+                                                shape = RoundedCornerShape(8.dp),
+                                                border = BorderStroke(1.dp, LightBorder)
+                                            ) {
+                                                Text("Hủy Bỏ", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            }
+
+                                            LiquidGlassButton(
+                                                onClick = {
+                                                    if (name.isNotBlank()) {
+                                                        val swValue = startWeightKg.toDoubleOrNull() ?: user.gestationStartWeight
+                                                        val twValue = targetWeightKg.toDoubleOrNull() ?: user.targetPregnancyWeight
+                                                        viewModel.updateProfile(
+                                                            name = name,
+                                                            lmp = lmpDate,
+                                                            edd = eddDate,
+                                                            dob = dobDate,
+                                                            conception = conceptionDate,
+                                                            startWeight = swValue,
+                                                            targetWeight = twValue
+                                                        )
+                                                        isEditing = false
+                                                        focusManager.clearFocus()
+                                                    }
+                                                },
+                                                modifier = Modifier
+                                                    .testTag("save_profile_btn")
+                                                    .weight(1.2f)
+                                                    .height(36.dp)
+                                            ) {
+                                                Icon(imageVector = Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text("Lưu Lại", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ================= SUBMENU 2: NHẬT KÝ & THEO DÕI CÂN NẶNG =================
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = WhiteCard),
+                shape = RoundedCornerShape(18.dp),
+                border = BorderStroke(1.dp, LightBorder)
+            ) {
+                Column {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { activeSubMenu = if (activeSubMenu == 1) null else 1 }
+                            .padding(horizontal = 14.dp, vertical = 14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(30.dp)
+                                    .clip(CircleShape)
+                                    .background(SoftPeachPrimary.copy(alpha = 0.4f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Star,
+                                    contentDescription = null,
+                                    tint = DeepBrownSecondary,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "Nhật ký cân nặng (${allWeightRecords.size})",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = DarkBrownText
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = DeepBrownSecondary,
+                            modifier = Modifier
+                                .graphicsLayer { rotationZ = if (activeSubMenu == 1) 180f else 0f }
+                                .size(18.dp)
+                        )
+                    }
+
+                    AnimatedVisibility(
+                        visible = activeSubMenu == 1,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        Column {
+                            HorizontalDivider(color = LightBorder, thickness = 0.5.dp)
                             
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text(
-                                        text = "${rec.weightKg} kg",
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.ExtraBold,
-                                        color = DeepBrownSecondary
-                                    )
-                                    Text(
-                                        text = if (diff >= 0) "+${String.format(Locale.US, "%.1f", diff)} kg" else "${String.format(Locale.US, "%.1f", diff)} kg",
-                                        fontSize = 10.5.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (diff >= 0) EmeraldText else AlertRed
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(10.dp))
-                                IconButton(
-                                    onClick = { viewModel.deleteWeightRecord(rec.weekNumber) },
-                                    modifier = Modifier.size(24.dp)
+                            val latestRecord = allWeightRecords.maxByOrNull { it.weekNumber }
+                            val currentW = latestRecord?.weightKg ?: user.gestationStartWeight
+                            val diffW = currentW - user.gestationStartWeight
+                            val targetGain = user.targetPregnancyWeight - user.gestationStartWeight
+
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                // 🌟 Beautiful mini-dashboard of weight
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = WarmPeachCard),
+                                    shape = RoundedCornerShape(14.dp),
+                                    border = BorderStroke(1.dp, LightBorder)
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Xóa dòng lịch sử",
-                                        tint = AlertRed.copy(alpha = 0.5f),
-                                        modifier = Modifier.size(16.dp)
-                                    )
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Text(
+                                            text = "Chỉ số tăng trưởng cân nặng",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = DarkBrownText
+                                        )
+                                        Spacer(modifier = Modifier.height(10.dp))
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                Text("Ban đầu", fontSize = 8.5.sp, color = TextMuted)
+                                                Text("${user.gestationStartWeight} kg", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextSlate)
+                                            }
+                                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                Text("Hiện tại", fontSize = 8.5.sp, color = TextMuted)
+                                                Text("${currentW} kg", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = DeepBrownSecondary)
+                                            }
+                                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                Text("Đã tăng", fontSize = 8.5.sp, color = TextMuted)
+                                                Text(
+                                                    text = if (diffW >= 0) "+${String.format(java.util.Locale.US, "%.1f", diffW)} kg" else "${String.format(java.util.Locale.US, "%.1f", diffW)} kg",
+                                                    fontSize = 12.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (diffW in 1.0..16.0) EmeraldText else AlertRed
+                                                )
+                                            }
+                                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                                Text("Mục tiêu bầu", fontSize = 8.5.sp, color = TextMuted)
+                                                Text("+${String.format(java.util.Locale.US, "%.1f", targetGain)} kg", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = DarkBrownText)
+                                            }
+                                        }
+                                    }
                                 }
+
+                                // Dynamic Trend Chart
+                                WeightProgressionChart(
+                                    records = allWeightRecords,
+                                    startWeight = user.gestationStartWeight,
+                                    targetWeight = user.targetPregnancyWeight
+                                )
+
+                                // Quick Log Weight Record Form
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = WarmBackground),
+                                    shape = RoundedCornerShape(14.dp),
+                                    border = BorderStroke(1.dp, LightBorder)
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        Text(
+                                            text = "✍️ Cập nhật cân nặng tuần này",
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = DarkBrownText
+                                        )
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            PregnancyTextField(
+                                                value = newWeightWeekStr,
+                                                onValueChange = { newWeightWeekStr = it },
+                                                label = "Tuần thai (1-41)",
+                                                modifier = Modifier.weight(1.1f)
+                                            )
+                                            PregnancyTextField(
+                                                value = newWeightStr,
+                                                onValueChange = { newWeightStr = it },
+                                                label = "Cân nặng (kg)",
+                                                modifier = Modifier.weight(1.0f)
+                                            )
+                                        }
+
+                                        PregnancyTextField(
+                                            value = newWeightNotes,
+                                            onValueChange = { newWeightNotes = it },
+                                            label = "Ghi chú thể trạng... (Ăn ngon, mỏi gối...)",
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        Button(
+                                            onClick = {
+                                                val wk = newWeightWeekStr.toIntOrNull()?.coerceIn(1, 41)
+                                                val wt = newWeightStr.toDoubleOrNull()
+                                                if (wk != null && wt != null) {
+                                                    viewModel.addOrUpdateWeight(wk, wt, newWeightNotes.trim())
+                                                    newWeightStr = ""
+                                                    newWeightNotes = ""
+                                                    focusManager.clearFocus()
+                                                }
+                                            },
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(36.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = DeepBrownSecondary),
+                                            shape = RoundedCornerShape(8.dp)
+                                        ) {
+                                            Icon(imageVector = Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text("Báo cáo cân nặng tuần", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+
+                                // List logs history
+                                Text(
+                                    text = "🗒️ Nhật ký đo lường tuần qua",
+                                    fontSize = 11.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = DarkBrownText
+                                )
+
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    val sortedLogs = allWeightRecords.sortedByDescending { it.weekNumber }
+                                    if (sortedLogs.isEmpty()) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(WhiteCard, RoundedCornerShape(10.dp))
+                                                .border(1.dp, LightBorder, RoundedCornerShape(10.dp))
+                                                .padding(vertical = 20.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = "Chưa có chỉ số nào được ghi lại.",
+                                                fontSize = 11.sp,
+                                                color = TextMuted
+                                            )
+                                        }
+                                    } else {
+                                        sortedLogs.forEach { rec ->
+                                            val diff = rec.weightKg - user.gestationStartWeight
+                                            Card(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = CardDefaults.cardColors(containerColor = WhiteCard),
+                                                shape = RoundedCornerShape(12.dp),
+                                                border = BorderStroke(1.dp, LightBorder)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(10.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                ) {
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .clip(RoundedCornerShape(6.dp))
+                                                                    .background(WarmPeachCard)
+                                                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                                            ) {
+                                                                Text(
+                                                                    text = "Tuần ${rec.weekNumber}",
+                                                                    fontSize = 9.5.sp,
+                                                                    fontWeight = FontWeight.Bold,
+                                                                    color = DeepBrownSecondary
+                                                                )
+                                                            }
+                                                            Spacer(modifier = Modifier.width(8.dp))
+                                                            Text(
+                                                                text = rec.dateRecorded ?: "", 
+                                                                fontSize = 9.sp, 
+                                                                color = TextMuted
+                                                            )
+                                                        }
+                                                        Spacer(modifier = Modifier.height(4.dp))
+                                                        Text(
+                                                            text = "Trạng thái: " + (rec.notes ?: "Khỏe mạnh bình thường"), 
+                                                            fontSize = 11.sp, 
+                                                            color = TextSlate
+                                                        )
+                                                    }
+
+                                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                                        Column(horizontalAlignment = Alignment.End) {
+                                                            Text(
+                                                                text = "${rec.weightKg} kg", 
+                                                                fontSize = 12.sp, 
+                                                                fontWeight = FontWeight.ExtraBold, 
+                                                                color = DarkBrownText
+                                                            )
+                                                            Text(
+                                                                text = if (diff >= 0) "+${String.format(java.util.Locale.US, "%.1f", diff)} kg" else "${String.format(java.util.Locale.US, "%.1f", diff)} kg",
+                                                                fontSize = 9.5.sp,
+                                                                fontWeight = FontWeight.Bold,
+                                                                color = if (diff >= 0) EmeraldText else AlertRed
+                                                            )
+                                                        }
+                                                        Spacer(modifier = Modifier.width(8.dp))
+                                                        IconButton(
+                                                            onClick = { viewModel.deleteWeightRecord(rec.weekNumber) },
+                                                            modifier = Modifier
+                                                                .size(24.dp)
+                                                                .background(AlertLightBg, CircleShape)
+                                                        ) {
+                                                            Icon(
+                                                                imageVector = Icons.Default.Delete, 
+                                                                contentDescription = "Xóa dòng", 
+                                                                tint = AlertRed, 
+                                                                modifier = Modifier.size(12.dp)
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ================= SUBMENU 3: THIẾT LẬP & CẨM NANG =================
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = WhiteCard),
+                shape = RoundedCornerShape(18.dp),
+                border = BorderStroke(1.dp, LightBorder)
+            ) {
+                Column {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { activeSubMenu = if (activeSubMenu == 2) null else 2 }
+                            .padding(horizontal = 14.dp, vertical = 14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(30.dp)
+                                    .clip(CircleShape)
+                                    .background(SoftPeachPrimary.copy(alpha = 0.4f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = null,
+                                    tint = DeepBrownSecondary,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "Cài đặt & Cẩm nang",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = DarkBrownText
+                            )
+                        }
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowDown,
+                            contentDescription = null,
+                            tint = DeepBrownSecondary,
+                            modifier = Modifier
+                                .graphicsLayer { rotationZ = if (activeSubMenu == 2) 180f else 0f }
+                                .size(18.dp)
+                        )
+                    }
+
+                    AnimatedVisibility(
+                        visible = activeSubMenu == 2,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        Column {
+                            HorizontalDivider(color = LightBorder, thickness = 0.5.dp)
+                            
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                // 🔊 Settings options
+                                var notificationEnabled by remember { mutableStateOf(true) }
+                                var soundEnabled by remember { mutableStateOf(true) }
+
+                                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text("🔔 Nhắc nhở sức khỏe", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = DarkBrownText)
+                                            Text("Tự động gửi thông báo lịch nhắc sắt, sữa mẹ dưỡng chất", fontSize = 9.sp, color = TextMuted)
+                                        }
+                                        Switch(
+                                            checked = notificationEnabled,
+                                            onCheckedChange = { notificationEnabled = it },
+                                            colors = SwitchDefaults.colors(
+                                                checkedThumbColor = WhiteCard,
+                                                checkedTrackColor = DeepBrownSecondary,
+                                                uncheckedThumbColor = TextMuted,
+                                                uncheckedTrackColor = LightBorder
+                                            )
+                                        )
+                                    }
+
+                                    HorizontalDivider(color = LightBorder, thickness = 0.5.dp)
+
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text("🔊 Âm thanh báo động", fontSize = 11.5.sp, fontWeight = FontWeight.Bold, color = DarkBrownText)
+                                            Text("Phát âm thanh nhạc nhẹ nhắc mẹ nghỉ ngơi đúng giờ", fontSize = 9.sp, color = TextMuted)
+                                        }
+                                        Switch(
+                                            checked = soundEnabled,
+                                            onCheckedChange = { soundEnabled = it },
+                                            colors = SwitchDefaults.colors(
+                                                checkedThumbColor = WhiteCard,
+                                                checkedTrackColor = DeepBrownSecondary,
+                                                uncheckedThumbColor = TextMuted,
+                                                uncheckedTrackColor = LightBorder
+                                            )
+                                        )
+                                    }
+                                }
+
+                                HorizontalDivider(color = LightBorder, thickness = 0.5.dp)
+
+                                // 🌸 Minimal beautiful App Intro text card
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    colors = CardDefaults.cardColors(containerColor = WarmBackground),
+                                    shape = RoundedCornerShape(12.dp),
+                                    border = BorderStroke(1.dp, LightBorder)
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = "🌸 Đồng hành cùng Mẹ suốt 9 tháng vàng",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 11.5.sp,
+                                            color = DarkBrownText
+                                        )
+                                        Text(
+                                            text = "Chào mừng mẹ bầu đến với cẩm nang số thông minh đồng hành cùng quá trình mang thai thiêng liêng. Lộ trình 9 mốc vàng thăm khám chuẩn y khoa, dinh dưỡng bồi bổ/cảnh báo kiêng kị, biểu đồ xu hướng cân nặng, và nhắc nhở uống thuốc tự động.",
+                                            fontSize = 10.sp,
+                                            color = TextSlate,
+                                            lineHeight = 14.sp
+                                        )
+                                    }
+                                }
+
+                                HorizontalDivider(color = LightBorder, thickness = 0.5.dp)
+
+                                // Administrative actions
+                                Text(
+                                    text = "Quản trị dữ liệu gốc thai kỳ",
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = DarkBrownText
+                                )
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Button(
+                                        onClick = { viewModel.resetToStandardMilestones() },
+                                        colors = ButtonDefaults.buttonColors(containerColor = WarmPeachCard),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .height(34.dp),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("Khởi tạo 9 mốc khám", color = DarkBrownText, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                    Button(
+                                        onClick = { },
+                                        colors = ButtonDefaults.buttonColors(containerColor = WarmPeachCard),
+                                        modifier = Modifier
+                                            .weight(1.1f)
+                                            .height(34.dp),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+                                        shape = RoundedCornerShape(8.dp)
+                                    ) {
+                                        Text("Đồng bộ đám mây", color = DarkBrownText, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = "Mẹ & Bé • Phiên bản v2.6.0 (Golden Release) • Đồng hành yêu thương cùng gia đình Việt.",
+                                    fontSize = 8.5.sp,
+                                    fontStyle = FontStyle.Italic,
+                                    color = TextMuted,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Center
+                                )
                             }
                         }
                     }
@@ -2850,7 +3950,8 @@ fun WavyBackgroundAccent(modifier: Modifier = Modifier, color: Color) {
 @Composable
 fun BottomNavigationBar(
     currentTab: Int,
-    onTabSelected: (Int) -> Unit
+    onTabSelected: (Int) -> Unit,
+    onMenuSelected: () -> Unit
 ) {
     NavigationBar(
         containerColor = WhiteCard,
@@ -2914,10 +4015,10 @@ fun BottomNavigationBar(
         )
         NavigationBarItem(
             modifier = Modifier.testTag("tab_button_profile"),
-            selected = currentTab == 4,
-            onClick = { onTabSelected(4) },
-            label = { Text("Cá nhân", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
-            icon = { Icon(imageVector = Icons.Default.Person, contentDescription = "Cá nhân") },
+            selected = false,
+            onClick = onMenuSelected,
+            label = { Text("Mở rộng", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
+            icon = { Icon(imageVector = Icons.Default.Menu, contentDescription = "Mở rộng") },
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = DeepBrownSecondary,
                 selectedTextColor = DeepBrownSecondary,
@@ -3754,7 +4855,7 @@ fun RemindersTab(
                     }
                 }
             } else {
-                items(medicineReminders) { reminder ->
+                items(medicineReminders, key = { it.id }) { reminder ->
                     val todayLog = allLogs.find { it.reminderId == reminder.id && it.date == todayStr }
                     ReminderScheduleCard(
                         reminder = reminder,
@@ -3794,7 +4895,7 @@ fun RemindersTab(
                     }
                 }
             } else {
-                items(dietReminders) { reminder ->
+                items(dietReminders, key = { it.id }) { reminder ->
                     val todayLog = allLogs.find { it.reminderId == reminder.id && it.date == todayStr }
                     ReminderScheduleCard(
                         reminder = reminder,
@@ -5370,4 +6471,51 @@ fun WaterTrackerCard() {
         }
     }
 }
+
+@Composable
+fun ProfileInfoRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(SoftPeachPrimary.copy(alpha = 0.25f))
+            .border(1.dp, LightBorder.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(28.dp)
+                .clip(CircleShape)
+                .background(SoftPeachPrimary.copy(alpha = 0.6f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = DeepBrownSecondary,
+                modifier = Modifier.size(15.dp)
+            )
+        }
+        Spacer(modifier = Modifier.width(10.dp))
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = DarkBrownText,
+            modifier = Modifier.weight(1f)
+        )
+        Text(
+            text = value,
+            fontSize = 12.5.sp,
+            fontWeight = FontWeight.Bold,
+            color = DeepBrownSecondary
+        )
+    }
+}
+
 
