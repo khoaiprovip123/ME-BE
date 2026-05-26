@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -3817,10 +3818,19 @@ fun SettingsDrawerContent(
 
 @Composable
 fun GitUpdateComponent() {
-    var updateState by remember { mutableStateOf(0) } // 0: Idle, 1: Checking, 2: Update Available, 3: Pulling, 4: Up to Date/Finished
-    var consoleLogs by remember { mutableStateOf<List<String>>(emptyList()) }
-    var progress by remember { mutableStateOf(0f) }
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    
+    var jsonUrl by remember { mutableStateOf("https://raw.githubusercontent.com/vankhoai690/me-va-be/main/update.json") }
+    var updateState by remember { mutableStateOf(0) } // 0: Idle, 1: Checking, 2: New Version Available, 3: Downloading, 4: Done/Installed, 5: Error, 6: No Update Needed
+    
+    var consoleLogs by remember { mutableStateOf<List<String>>(listOf("Vui lòng tải file update.json và APK tương ứng lên kho lưu trữ Git (GitHub/GitLab) của bạn.")) }
+    var latestVersionName by remember { mutableStateOf("2.6.3") }
+    var latestVersionCode by remember { mutableStateOf(263) }
+    var latestChangelog by remember { mutableStateOf("• Tự động kiểm tra phiên bản mới từ file config update.json trên Git.\n• Hỗ trợ tải trực tiếp tệp cài đặt APK bảo mật.\n• Kích hoạt giao diện cài đặt tức thì trên Google Android OS.") }
+    var apkDownloadUrl by remember { mutableStateOf("") }
+    var downloadProgress by remember { mutableStateOf(0f) }
+    var errorMessage by remember { mutableStateOf("") }
 
     Card(
         modifier = Modifier
@@ -3840,7 +3850,7 @@ fun GitUpdateComponent() {
                     Text(text = "🔄", fontSize = 14.sp)
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "Git Update System",
+                        text = "Real Git Update System (Auto)",
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Bold,
                         color = DarkBrownText
@@ -3860,17 +3870,21 @@ fun GitUpdateComponent() {
                 ) {
                     Text(
                         text = when (updateState) {
-                            0 -> "v2.6.0"
-                            1 -> "Đang kiểm tra..."
-                            2 -> "Có bản mới v2.6.1"
-                            3 -> "Updating..."
-                            else -> "v2.6.1-patch"
+                            0 -> "v2.6.2"
+                            1 -> "Đang Check..."
+                            2 -> "Mới: v$latestVersionName"
+                            3 -> "Đang tải (${(downloadProgress * 100).toInt()}%)"
+                            4 -> "Đã cập nhật"
+                            5 -> "Lỗi kết nối"
+                            6 -> "v2.6.2 (Mới nhất)"
+                            else -> "v2.6.2"
                         },
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
                         color = when (updateState) {
                             4 -> EmeraldText
                             2 -> AlertRed
+                            5 -> Color.Red
                             else -> DarkBrownText
                         }
                     )
@@ -3878,11 +3892,34 @@ fun GitUpdateComponent() {
             }
 
             Text(
-                text = "Hệ thống quản lý cập nhật từ kho lưu trữ Git chính thức của ứng dụng mẹ bầu.",
+                text = "Hệ thống cập nhật tự động bằng cách tải trực tiếp APK từ Git của bạn và liên kết trình cài đặt Android OS.",
                 fontSize = 10.sp,
                 color = TextSlate,
                 lineHeight = 14.sp
             )
+
+            // Input field for update JSON URL so they can customize it
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = "Đường dẫn File Cấu Hình Update (Git URL):",
+                    fontSize = 9.5.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = DarkBrownText
+                )
+                OutlinedTextField(
+                    value = jsonUrl,
+                    onValueChange = { jsonUrl = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = SoftPeachPrimary,
+                        unfocusedBorderColor = LightBorder,
+                        focusedLabelColor = SoftPeachPrimary,
+                    ),
+                    textStyle = androidx.compose.ui.text.TextStyle(fontSize = 10.sp),
+                    singleLine = true,
+                    placeholder = { Text("Nhập link raw JSON từ GitHub", fontSize = 10.sp) }
+                )
+            }
 
             if (consoleLogs.isNotEmpty()) {
                 Card(
@@ -3901,7 +3938,7 @@ fun GitUpdateComponent() {
                         items(consoleLogs) { log ->
                             Text(
                                 text = log,
-                                color = if (log.startsWith("$")) Color(0xFF8CE8FF) else if (log.contains("error")) Color(0xFFFF6B6B) else Color(0xFFDCDCDC),
+                                color = if (log.startsWith("$")) Color(0xFF8CE8FF) else if (log.contains("Lỗi") || log.contains("failed") || log.contains("error")) Color(0xFFFF6B6B) else if (log.contains("Thành công") || log.contains("success")) Color(0xFF8EFF95) else Color(0xFFDCDCDC),
                                 fontSize = 9.5.sp,
                                 fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
                             )
@@ -3913,7 +3950,7 @@ fun GitUpdateComponent() {
             if (updateState == 3) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     LinearProgressIndicator(
-                        progress = { progress },
+                        progress = { downloadProgress },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(6.dp)
@@ -3927,12 +3964,12 @@ fun GitUpdateComponent() {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "Đang kéo mã nguồn (Git Pull)...",
+                            text = "Đang tải tệp cài đặt APK...",
                             fontSize = 9.5.sp,
                             color = TextSlate
                         )
                         Text(
-                            text = "${(progress * 100).toInt()}%",
+                            text = "${(downloadProgress * 100).toInt()} %",
                             fontSize = 9.5.sp,
                             fontWeight = FontWeight.Bold,
                             color = DeepBrownSecondary
@@ -3942,27 +3979,61 @@ fun GitUpdateComponent() {
             }
 
             when (updateState) {
-                0 -> {
+                0, 5, 6 -> {
                     Button(
                         onClick = {
                             coroutineScope.launch {
                                 updateState = 1
-                                consoleLogs = listOf("$ git fetch origin main --verbose")
-                                kotlinx.coroutines.delay(1000)
-                                consoleLogs = consoleLogs + listOf(
-                                    "Connecting to github.com/aistudio-pregnancy/me-va-be...",
-                                    "remote: Enumerating objects: 12, done.",
-                                    "remote: Counting objects: 100% (12/12), done.",
-                                    "remote: Compressing objects: 100% (8/8), done."
+                                consoleLogs = listOf(
+                                    "$ curl -X GET \"$jsonUrl\"",
+                                    "Đang kết nối tới server Git...",
+                                    "Đang truy cập file dữ liệu cấu hình cập nhật..."
                                 )
-                                kotlinx.coroutines.delay(1200)
-                                consoleLogs = consoleLogs + listOf(
-                                    "From github.com/aistudio-pregnancy/me-va-be",
-                                    "   8d9f123..e54ab23  main       -> origin/main",
-                                    "Status: 1 new release commit found (v2.6.1-patch)"
-                                )
-                                kotlinx.coroutines.delay(1000)
-                                updateState = 2
+                                try {
+                                    val result = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                        val url = java.net.URL(jsonUrl)
+                                        val conn = url.openConnection() as java.net.HttpURLConnection
+                                        conn.requestMethod = "GET"
+                                        conn.connectTimeout = 8000
+                                        conn.readTimeout = 8000
+                                        conn.connect()
+                                        if (conn.responseCode == 200) {
+                                            conn.inputStream.bufferedReader().use { it.readText() }
+                                        } else {
+                                            throw Exception("Máy chủ phản hồi mã lỗi HTTP: " + conn.responseCode)
+                                        }
+                                    }
+                                    consoleLogs = consoleLogs + listOf(
+                                        "Kết nối thành công!",
+                                        "Nội dung nhận được:\n$result"
+                                    )
+                                    val obj = org.json.JSONObject(result)
+                                    latestVersionName = if (obj.has("versionName")) obj.getString("versionName") else "2.6.3"
+                                    latestVersionCode = if (obj.has("versionCode")) obj.getInt("versionCode") else 263
+                                    latestChangelog = if (obj.has("changelog")) obj.getString("changelog") else "• Cập nhật các bản sửa lỗi và tính năng mới."
+                                    apkDownloadUrl = if (obj.has("apkUrl")) obj.getString("apkUrl") else ""
+                                    
+                                    val currentCode = 262 // app version 2.6.2
+                                    if (latestVersionCode > currentCode) {
+                                        updateState = 2
+                                        consoleLogs = consoleLogs + listOf(
+                                            "Kết quả phân tích: Có bản cập nhật mới v$latestVersionName (Mã bản dựng: $latestVersionCode)!",
+                                            "Bản hiện tại: v2.6.2 (Mã bản dựng: 262)"
+                                        )
+                                    } else {
+                                        updateState = 6
+                                        consoleLogs = consoleLogs + listOf(
+                                            "Kết quả phân tích: Ứng dụng hiện tại v2.6.2 đã là phiên bản mới nhất từ Git!"
+                                        )
+                                    }
+                                } catch (e: Exception) {
+                                    updateState = 5
+                                    errorMessage = e.localizedMessage ?: "Không thể kết nối internet hoặc sai đường dẫn URL."
+                                    consoleLogs = consoleLogs + listOf(
+                                        "Lỗi hệ thống: $errorMessage",
+                                        "💡 Mẹo: Nhấn nút bên dưới để tạo bản cập nhật giả định (v2.6.3/APK Mẫu) để kiểm tra hoạt động tải và cài đặt thực tế của máy!"
+                                    )
+                                }
                             }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = WarmPeachCard),
@@ -3974,6 +4045,30 @@ fun GitUpdateComponent() {
                     ) {
                         Text("🔍 Kiểm tra cập nhật từ Git", color = DarkBrownText, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     }
+
+                    if (updateState == 5) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        OutlinedButton(
+                            onClick = {
+                                latestVersionName = "2.6.3"
+                                latestVersionCode = 263
+                                latestChangelog = "• Cấu hình nâng cấp tự động từ Git (Hệ thống thực tế).\n• Cải tiến giao diện co dãn và hiển thị chi tiết mốc tuần.\n• File APK thử nghiệm tải trực tiếp từ internet và tự động mồi bộ cài Android."
+                                apkDownloadUrl = "https://raw.githubusercontent.com/vankhoai690/me-va-be/main/me-va-be-v2.6.3.apk"
+                                updateState = 2
+                                consoleLogs = listOf(
+                                    "Chế độ dùng thử: Đã tải mẫu cấu hình v2.6.3 thành công!",
+                                    "Sẵn sàng thử nghiệm tải về & cài đặt tự động."
+                                )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(30.dp),
+                            shape = RoundedCornerShape(8.dp),
+                            border = BorderStroke(1.dp, SoftPeachPrimary.copy(alpha = 0.5f))
+                        ) {
+                            Text("💡 Thử Nghiệm Tải & Cài Đặt Thực Tế (Mẫu v2.6.3)", color = SoftPeachPrimary, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
                 }
                 2 -> {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -3984,17 +4079,25 @@ fun GitUpdateComponent() {
                         ) {
                             Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(
-                                    text = "🎁 Nhật ký thay đổi (v2.6.1):",
+                                    text = "🎁 Nhật ký thay đổi (v$latestVersionName):",
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = DeepBrownSecondary
                                 )
                                 Text(
-                                    text = "• Tối ưu hóa dung lượng cơ sở dữ liệu và cấu trúc lưu trữ bảo mật cho từng email mẹ bầu riêng tư.\n• Cải tiến tính năng thu gọn / mở rộng hồ sơ, giúp giao diện gọn gàng thanh thoát.\n• Sửa một số lỗi giao diện và tăng tốc thời gian mở ứng dụng.",
+                                    text = latestChangelog,
                                     fontSize = 9.5.sp,
                                     color = DarkBrownText,
                                     lineHeight = 13.sp
                                 )
+                                if (apkDownloadUrl.isNotEmpty()) {
+                                    Text(
+                                        text = "APK URL: $apkDownloadUrl",
+                                        fontSize = 8.sp,
+                                        color = TextSlate,
+                                        lineHeight = 10.sp
+                                    )
+                                }
                             }
                         }
 
@@ -4002,34 +4105,80 @@ fun GitUpdateComponent() {
                             onClick = {
                                 coroutineScope.launch {
                                     updateState = 3
-                                    progress = 0f
-                                    consoleLogs = consoleLogs + listOf("$ git pull origin main")
-                                    kotlinx.coroutines.delay(800)
-                                    progress = 0.25f
+                                    downloadProgress = 0f
+                                    val targetUrl = if (apkDownloadUrl.isBlank()) {
+                                        "https://raw.githubusercontent.com/vankhoai690/me-va-be/main/me-va-be-v2.6.3.apk"
+                                    } else {
+                                        apkDownloadUrl
+                                    }
                                     consoleLogs = consoleLogs + listOf(
-                                        "Updating 8d9f123..e54ab23",
-                                        "Fast-forward",
-                                        " app/src/main/java/com/example/MainActivity.kt | 24 ++--"
+                                        "$ download \"$targetUrl\"",
+                                        "Đang kết nối tải tệp tệp apk..."
                                     )
-                                    kotlinx.coroutines.delay(1000)
-                                    progress = 0.6f
-                                    consoleLogs = consoleLogs + listOf(
-                                        " 1 file changed, 18 insertions(+), 6 deletions(-)",
-                                        "Unpacking objects: 100% (14/14), 1.45 KiB | 1.45 MiB/s, done."
-                                    )
-                                    kotlinx.coroutines.delay(1200)
-                                    progress = 0.9f
-                                    consoleLogs = consoleLogs + listOf(
-                                        "Recompiling Jetpack Compose UI trees...",
-                                        "Applying database migrations for privacy space updates (v4 -> v5)..."
-                                    )
-                                    kotlinx.coroutines.delay(1000)
-                                    progress = 1.0f
-                                    updateState = 4
-                                    consoleLogs = consoleLogs + listOf(
-                                        "Successfully built APK target v2.6.1-patch (Release Mode)",
-                                        "Local state refreshed! Welcome to v2.6.1."
-                                    )
+                                    
+                                    try {
+                                        val downloadedFile = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                            val url = java.net.URL(targetUrl)
+                                            val conn = url.openConnection() as java.net.HttpURLConnection
+                                            conn.connect()
+                                            
+                                            if (conn.responseCode != 200) {
+                                                throw Exception("Máy chủ tải file trả về mã lỗi: " + conn.responseCode)
+                                            }
+                                            
+                                            val totalLength = conn.contentLength
+                                            val inputStream = java.io.BufferedInputStream(conn.inputStream)
+                                            
+                                            val tempFile = java.io.File(context.cacheDir, "me_va_be_v2_6_3.apk")
+                                            if (tempFile.exists()) {
+                                                tempFile.delete()
+                                            }
+                                            
+                                            val outputStream = java.io.FileOutputStream(tempFile)
+                                            val buffer = ByteArray(8192)
+                                            var bytesRead: Int
+                                            var totalBytesRead: Long = 0
+                                            
+                                            while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                                                totalBytesRead += bytesRead
+                                                if (totalLength > 0) {
+                                                    downloadProgress = totalBytesRead.toFloat() / totalLength
+                                                }
+                                                outputStream.write(buffer, 0, bytesRead)
+                                            }
+                                            outputStream.flush()
+                                            outputStream.close()
+                                            inputStream.close()
+                                            tempFile
+                                        }
+                                        
+                                        consoleLogs = consoleLogs + listOf(
+                                            "Tải APK thành công (${downloadedFile.length()} bytes)!",
+                                            "Mồi trình cài đặt Android Package Installer cấp quyền..."
+                                        )
+                                        
+                                        updateState = 4
+                                        
+                                        // Trigger installation intent
+                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                            val apkUri: android.net.Uri = androidx.core.content.FileProvider.getUriForFile(
+                                                context, 
+                                                "com.example.fileprovider", 
+                                                downloadedFile
+                                            )
+                                            setDataAndType(apkUri, "application/vnd.android.package-archive")
+                                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                        }
+                                        context.startActivity(intent)
+                                        
+                                    } catch (e: Exception) {
+                                        updateState = 5
+                                        errorMessage = e.localizedMessage ?: "Tải APK lỗi."
+                                        consoleLogs = consoleLogs + listOf(
+                                            "Lỗi tải APK: $errorMessage"
+                                        )
+                                    }
                                 }
                             },
                             colors = ButtonDefaults.buttonColors(containerColor = DeepBrownSecondary),
@@ -4039,12 +4188,12 @@ fun GitUpdateComponent() {
                             contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Text("⬇️ Tải & Cập nhật ngay (Git Pull)", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                            Text("⬇️ Tải & Cập nhật ngay (APK)", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
                 3 -> {
-                    // Pulling state, show progress
+                    // Downloading state
                 }
                 4 -> {
                     Card(
@@ -4053,26 +4202,67 @@ fun GitUpdateComponent() {
                         shape = RoundedCornerShape(8.dp),
                         border = BorderStroke(0.5.dp, EmeraldText.copy(alpha = 0.3f))
                     ) {
-                        Row(
-                            modifier = Modifier.padding(10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(text = "✓", color = EmeraldText, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(text = "✓", color = EmeraldText, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                                Text(
+                                    text = "Tải về hoàn tất thành công!",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = DarkBrownText
+                                )
+                            }
                             Text(
-                                text = "Thiết bị mẹ bầu đã cập nhật thành công lên v2.6.1 qua Git! Môi trường lưu trữ riêng tư đã được tối ưu bảo mật hoàn hảo.",
-                                fontSize = 10.sp,
+                                text = "Đã giải nén và mở trình cài đặt Android OS của thiết bị. Vui lòng cấp quyền (nếu được hỏi) và bấm Xác nhận cài đặt trên màn hình điện thoại.",
+                                fontSize = 9.5.sp,
                                 color = DarkBrownText,
                                 lineHeight = 14.sp
                             )
                         }
                     }
 
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Button(
+                        onClick = {
+                            try {
+                                val tempFile = java.io.File(context.cacheDir, "me_va_be_v2_6_3.apk")
+                                if (tempFile.exists()) {
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).apply {
+                                        val apkUri: android.net.Uri = androidx.core.content.FileProvider.getUriForFile(
+                                            context, 
+                                            "com.example.fileprovider", 
+                                            tempFile
+                                        )
+                                        setDataAndType(apkUri, "application/vnd.android.package-archive")
+                                        addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                        addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    context.startActivity(intent)
+                                } else {
+                                    updateState = 0
+                                }
+                            } catch (e: Exception) {
+                                android.widget.Toast.makeText(context, e.localizedMessage, android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = SoftPeachPrimary),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(34.dp),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text("🚀 Thử Kích Hoạt Lại Trình Cài Đặt", color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+
                     OutlinedButton(
                         onClick = {
                             updateState = 0
-                            consoleLogs = emptyList()
-                            progress = 0f
+                            consoleLogs = listOf("Quay lại màn hình kiểm tra cập nhật.")
+                            downloadProgress = 0f
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -4080,7 +4270,7 @@ fun GitUpdateComponent() {
                         shape = RoundedCornerShape(8.dp),
                         border = BorderStroke(1.dp, LightBorder)
                     ) {
-                        Text("Quay về nguyên bản", color = TextMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        Text("Trở về", color = TextMuted, fontSize = 9.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
