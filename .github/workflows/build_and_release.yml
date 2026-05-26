@@ -126,7 +126,7 @@ jobs:
 
       - name: Khởi tạo lại Gradle Wrapper để đảm bảo tệp Jar chuẩn (Fix Corrupt Jar)
         run: |
-          gradle wrapper --gradle-version 8.7
+          gradle wrapper --gradle-version 9.3.1
           chmod +x gradlew
 
       - name: Build ứng dụng thành tệp APK (Sử dụng compiler daemon)
