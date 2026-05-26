@@ -2,8 +2,10 @@ name: Build and Auto-Release APK
 
 on:
   push:
+    branches:
+      - main # Tự động chạy khi bạn đẩy (push) code trực tiếp lên nhánh main
     tags:
-      - 'v*' # Chạy khi bạn đẩy một tag có định dạng vX.Y.Z (Ví dụ: v2.6.3, v2.6.4)
+      - 'v*' # Chạy khi đẩy thẻ phiên bản vX.Y.Z (Ví dụ: v2.6.4)
   workflow_dispatch:
     inputs:
       version_tag:
@@ -12,7 +14,7 @@ on:
         default: 'v2.6.3'
 
 permissions:
-  contents: write # Cấp quyền ghi để tạo Release và đẩy file update.json lên branch main
+  contents: write # Quyền tối cao để đẩy thẻ tag và update.json về repo
 
 jobs:
   build:
@@ -31,92 +33,105 @@ jobs:
           java-version: '17'
           cache: 'gradle'
 
-      - name: Khởi tạo lại Gradle Wrapper để tránh lỗi tệp Jar bị hỏng (Corrupt Jar)
+      - name: Tự động phân tích, tăng phiên bản và Cập nhật File update.json
         run: |
-          gradle wrapper --gradle-version 9.3.1
-          chmod +x gradlew
-
-      - name: Tự động tạo và Cập nhật File update.json trên nhánh main
-        run: |
-          # Xác định tên TAG_NAME dựa trên hình thức kích hoạt (Đẩy thẻ hoặc Bấm nút thủ công)
+          # 1. Xác định tên TAG_NAME dựa vào hình thức kích hoạt (Trực tiếp đẩy code lên main, đẩy Tag, bấm chạy thủ công)
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAG_NAME="${{ github.event.inputs.version_tag }}"
-          else
+            echo "Kích hoạt thủ công: $TAG_NAME"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
             TAG_NAME=${GITHUB_REF#refs/tags/}
+            echo "Đẩy tag thủ công: $TAG_NAME"
+          else
+            # Đẩy thẳng code lên main: Tự đọc update.json lấy phiên bản hiện tại rồi tự động tăng chữ số cuối (Patch version)
+            CURRENT_VER_NAME=$(jq -r '.versionName' update.json 2>/dev/null || echo "2.6.3")
+            if [ "$CURRENT_VER_NAME" = "null" ] || [ -z "$CURRENT_VER_NAME" ]; then
+              CURRENT_VER_NAME="2.6.3"
+            fi
+            
+            # Phân tách và tự động tăng số phiên bản
+            IFS='.' read -r major minor patch <<< "$CURRENT_VER_NAME"
+            new_patch=$((patch + 1))
+            NEW_VERSION_NAME="$major.$minor.$new_patch"
+            TAG_NAME="v$NEW_VERSION_NAME"
+            echo "Phát hiện sự kiện đẩy code lên main. Tự động nâng cấp từ v$CURRENT_VER_NAME -> $TAG_NAME"
           fi
 
-          # Loại bỏ ký tự 'v' để lấy số phiên bản (Ví dụ: 2.6.3)
+          # Xuất biến TAG_NAME ra môi trường để các bước sau tái sử dụng cực kỳ tiện lợi
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+
+          # 2. Xử lý giá trị versionName và versionCode tương thích
           VERSION_NAME=${TAG_NAME#v}
-          # Tính toán versionCode bằng cách gom các số (Ví dụ: 2.6.3 -> 263)
           VERSION_CODE=$(echo $VERSION_NAME | tr -d '.')
           
-          # URL tải APK trực tiếp từ GitHub Releases của bạn
+          # Đường dẫn tải trực tiếp APK từ Release của repo tương ứng
           APK_URL="https://github.com/${{ github.repository }}/releases/download/${TAG_NAME}/me-va-be-${TAG_NAME}.apk"
           
-          echo "Đang xử lý tạo dữ liệu cấu hình cho phiên bản $VERSION_NAME ($VERSION_CODE)..."
+          echo "Đang xử lý tạo dữ liệu cấu hình cho phiên bản $VERSION_NAME (Mã bản dựng: $VERSION_CODE)..."
           
-          # Ghi nội dung mới vào file update.json ở phân hệ gốc để app cài của khách tải về đọc
+          # Ghi đè file update.json mới chuẩn hóa để điện thoại khách tải về tự động giải mã
           cat <<EOF > update.json
           {
             "versionName": "${VERSION_NAME}",
             "versionCode": ${VERSION_CODE},
-            "changelog": "• Cập nhật tự động phiên bản mới ${VERSION_NAME} qua GitHub Actions.\n• Tối ưu hệ thống, kiểm thử cài đặt và vá bảo mật tự động.\n• Vui lòng đồng hành và trải nghiệm giao diện nâng cấp mới.",
+            "changelog": "• Đã phát hành phiên bản tự động mới nhất ${VERSION_NAME} qua GitHub Actions.\n• Vá bảo mật, tự động tương thích và giải quyết lỗi lặp KSP daemon.\n• Quý khách vui lòng nâng cấp để trải nghiệm mượt mà nhất mốc thai sản.",
             "apkUrl": "${APK_URL}"
           }
           EOF
           
-          # Thiết lập cấu hình tài khoản Git để push ngược lại GitHub
+          # 3. Đồng bộ hóa File update.json mới và Tag trực tiếp lên Repository của bạn
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Đồng bộ lại mã nguồn mới nhất của nhánh main
           git fetch origin main
           git checkout main || git checkout -b main
           git add update.json
           git commit -m "Auto-update version config to ${TAG_NAME} [skip ci]" || echo "No changes to commit"
           
-          # Xử lý đẩy tag và mã nguồn lên GitHub phù hợp với từng trigger
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # Xóa các tag trùng cục bộ nếu có
             git tag -d $TAG_NAME || true
             git push origin :refs/tags/$TAG_NAME || true
             git tag $TAG_NAME
             git push origin main --tags
-          else
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
             git push origin main
             git checkout $TAG_NAME
-          fi
-
-      - name: Build ứng dụng thành tệp APK (Debug/Test Release)
-        run: ./gradlew assembleDebug
-
-      - name: Sao chép và Đổi tên tệp APK đầu ra
-        run: |
-          # Xác định tên TAG_NAME tương thích
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG_NAME="${{ github.event.inputs.version_tag }}"
           else
-            TAG_NAME=${GITHUB_REF#refs/tags/}
+            git tag -d $TAG_NAME || true
+            git push origin :refs/tags/$TAG_NAME || true
+            git tag $TAG_NAME
+            git push origin main --tags
           fi
-          mkdir -p build_output
-          cp app/build/outputs/apk/debug/app-debug.apk build_output/me-va-be-${TAG_NAME}.apk
-          echo "Đã đóng gói thành công APK tại build_output/me-va-be-${TAG_NAME}.apk"
 
-      - name: Tạo Bản phát hành GitHub Release và tải tệp APK lên
+      - name: Khởi tạo lại Gradle Wrapper để đảm bảo tệp Jar chuẩn (Fix Corrupt Jar)
+        run: |
+          gradle wrapper --gradle-version 9.3.1
+          chmod +x gradlew
+
+      - name: Build ứng dụng thành tệp APK (Sử dụng compiler daemon để tránh lỗi KSP NullPointer)
+        run: ./gradlew assembleDebug -Pkotlin.compiler.execution.strategy=daemon
+
+      - name: Sao chép và Đổi tên tệp APK đầu ra và định danh bản dựng
+        run: |
+          mkdir -p build_output
+          cp app/build/outputs/apk/debug/app-debug.apk build_output/me-va-be-${{ env.TAG_NAME }}.apk
+          echo "Đã đóng gói thành công APK tại: build_output/me-va-be-${{ env.TAG_NAME }}.apk"
+
+      - name: Tự tạo Bản phát hành và Tải tệp APK cài đặt lên GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.version_tag || github.ref_name }}
-          name: Bản Phát Hành ${{ github.event.inputs.version_tag || github.ref_name }}
+          tag_name: ${{ env.TAG_NAME }}
+          name: Bản Phát Hành ${{ env.TAG_NAME }}
           body: |
-            ## 🎉 Mẹ & Bé đã có phiên bản mới ${{ github.event.inputs.version_tag || github.ref_name }}!
+            ## 🎉 Mẹ & Bé đã có phiên bản mới ${{ env.TAG_NAME }}!
             
             Hệ thống GitHub Actions đã tự quản lý biên dịch và phân phối tự động thành công:
-            * **Tên gói cài đặt:** `me-va-be-${{ github.event.inputs.version_tag || github.ref_name }}.apk`
+            * **Tên gói cài đặt:** `me-va-be-${{ env.TAG_NAME }}.apk`
             * **Cách cài đặt:** Khách hàng đang dùng ứng dụng cũ chỉ cần nhấn vào thông báo **Cập nhật ngay** bên trong ứng dụng, hoặc nhấn tải APK đính kèm bên dưới để cài đè trực tiếp!
             
             _Chúc ba mẹ và bé luôn có những trải nghiệm tuyệt vời cùng Mẹ & Bé!_
           draft: false
           prerelease: false
-          files: build_output/me-va-be-${{ github.event.inputs.version_tag || github.ref_name }}.apk
+          files: build_output/me-va-be-${{ env.TAG_NAME }}.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

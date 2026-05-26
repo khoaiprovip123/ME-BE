@@ -3821,7 +3821,7 @@ fun GitUpdateComponent() {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     
-    var jsonUrl by remember { mutableStateOf("https://raw.githubusercontent.com/vankhoai690/me-va-be/main/update.json") }
+    var jsonUrl by remember { mutableStateOf("https://raw.githubusercontent.com/khoaiprovip123/ME-BE/main/update.json") }
     var updateState by remember { mutableStateOf(0) } // 0: Idle, 1: Checking, 2: New Version Available, 3: Downloading, 4: Done/Installed, 5: Error, 6: No Update Needed
     
     var consoleLogs by remember { mutableStateOf<List<String>>(listOf("Vui lòng tải file update.json và APK tương ứng lên kho lưu trữ Git (GitHub/GitLab) của bạn.")) }
@@ -4053,7 +4053,7 @@ fun GitUpdateComponent() {
                                 latestVersionName = "2.6.3"
                                 latestVersionCode = 263
                                 latestChangelog = "• Cấu hình nâng cấp tự động từ Git (Hệ thống thực tế).\n• Cải tiến giao diện co dãn và hiển thị chi tiết mốc tuần.\n• File APK thử nghiệm tải trực tiếp từ internet và tự động mồi bộ cài Android."
-                                apkDownloadUrl = "https://raw.githubusercontent.com/vankhoai690/me-va-be/main/me-va-be-v2.6.3.apk"
+                                apkDownloadUrl = "https://github.com/khoaiprovip123/ME-BE/releases/download/v2.6.3/me-va-be-v2.6.3.apk"
                                 updateState = 2
                                 consoleLogs = listOf(
                                     "Chế độ dùng thử: Đã tải mẫu cấu hình v2.6.3 thành công!",
@@ -4107,7 +4107,7 @@ fun GitUpdateComponent() {
                                     updateState = 3
                                     downloadProgress = 0f
                                     val targetUrl = if (apkDownloadUrl.isBlank()) {
-                                        "https://raw.githubusercontent.com/vankhoai690/me-va-be/main/me-va-be-v2.6.3.apk"
+                                        "https://github.com/khoaiprovip123/ME-BE/releases/download/v2.6.3/me-va-be-v2.6.3.apk"
                                     } else {
                                         apkDownloadUrl
                                     }
