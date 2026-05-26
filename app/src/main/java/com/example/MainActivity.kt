@@ -2736,6 +2736,7 @@ fun SettingsDrawerContent(
 
     var isEditing by remember { mutableStateOf(false) }
     var activeSubMenu by remember { mutableStateOf<Int?>(null) } // Mặc định thu gọn, khi nào cần mới mở bung ra
+    var developerClickCount by remember { mutableStateOf(0) }
 
     // For new weight record input inside weight tracking submenu
     val allWeightRecords by viewModel.allWeightRecordsState.collectAsStateWithLifecycle()
@@ -3789,16 +3790,20 @@ fun SettingsDrawerContent(
                                     }
                                 }
 
-                                Spacer(modifier = Modifier.height(4.dp))
-                                GitUpdateComponent()
+                                if (developerClickCount >= 5) {
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    GitUpdateComponent()
+                                }
 
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "Mẹ & Bé • Phiên bản v2.6.0 (Golden Release) • Đồng hành yêu thương cùng gia đình Việt.",
+                                    text = "Mẹ & Bé • Phiên bản v2.6.2 (Golden Release) • Đồng hành yêu thương cùng gia đình Việt.",
                                     fontSize = 8.5.sp,
                                     fontStyle = FontStyle.Italic,
                                     color = TextMuted,
-                                    modifier = Modifier.fillMaxWidth(),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { developerClickCount++ },
                                     textAlign = TextAlign.Center
                                 )
                             }
