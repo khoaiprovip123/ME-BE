@@ -14,7 +14,7 @@ on:
         default: 'v2.6.3'
 
 permissions:
-  contents: write # Quyền tối cao để đẩy thẻ tag và update.json về repo
+  contents: write # Quyền tối cao để đẩy thẻ tag, build.gradle.kts và update.json về repo
 
 jobs:
   build:
@@ -33,9 +33,25 @@ jobs:
           java-version: '17'
           cache: 'gradle'
 
-      - name: Tự động phân tích, tăng phiên bản và Cập nhật File update.json
+      - name: Giải mã Android Debug Keystore để đồng bộ hóa chữ ký APK
         run: |
-          # 1. Xác định tên TAG_NAME dựa vào hình thức kích hoạt (Trực tiếp đẩy code lên main, đẩy Tag, bấm chạy thủ công)
+          if [ -f "debug.keystore.base64" ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+            echo "✅ Đã khôi phục debug.keystore thành công để đồng bộ chữ ký bản dựng!"
+          else
+            echo "⚠️ Không tìm thấy debug.keystore.base64!"
+          fi
+
+      - name: Ghi đè cấu hình Kotlin Compiler Strategy sang daemon tránh lỗi KSP NullPointer
+        run: |
+          if [ -f "gradle.properties" ]; then
+            sed -i 's/kotlin.compiler.execution.strategy=in-process/kotlin.compiler.execution.strategy=daemon/g' gradle.properties
+            echo "✅ Đã chuyển đổi chiến lược biên dịch sang daemon trong gradle.properties thành công!"
+          fi
+
+      - name: Tự động phân tích, tăng phiên bản, Cập nhật File update.json và build.gradle.kts
+        run: |
+          # 1. Xác định tên TAG_NAME dựa vào hình thức kích hoạt
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAG_NAME="${{ github.event.inputs.version_tag }}"
             echo "Kích hoạt thủ công: $TAG_NAME"
@@ -43,13 +59,13 @@ jobs:
             TAG_NAME=${GITHUB_REF#refs/tags/}
             echo "Đẩy tag thủ công: $TAG_NAME"
           else
-            # Đẩy thẳng code lên main: Tự đọc update.json lấy phiên bản hiện tại rồi tự động tăng chữ số cuối (Patch version)
+            # Đẩy thẳng code lên main: Tự đọc update.json lấy phiên bản hiện tại rồi tự động tăng patch version
             CURRENT_VER_NAME=$(jq -r '.versionName' update.json 2>/dev/null || echo "2.6.3")
             if [ "$CURRENT_VER_NAME" = "null" ] || [ -z "$CURRENT_VER_NAME" ]; then
               CURRENT_VER_NAME="2.6.3"
             fi
             
-            # Phân tách và tự động tăng số phiên bản
+            # Phân tách và tự động tăng số phiên bản (Ví dụ: 2.6.3 -> 2.6.4)
             IFS='.' read -r major minor patch <<< "$CURRENT_VER_NAME"
             new_patch=$((patch + 1))
             NEW_VERSION_NAME="$major.$minor.$new_patch"
@@ -57,13 +73,18 @@ jobs:
             echo "Phát hiện sự kiện đẩy code lên main. Tự động nâng cấp từ v$CURRENT_VER_NAME -> $TAG_NAME"
           fi
 
-          # Xuất biến TAG_NAME ra môi trường để các bước sau tái sử dụng cực kỳ tiện lợi
+          # Xuất biến TAG_NAME ra môi trường
           echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
 
           # 2. Xử lý giá trị versionName và versionCode tương thích
           VERSION_NAME=${TAG_NAME#v}
           VERSION_CODE=$(echo $VERSION_NAME | tr -d '.')
           
+          # Cập nhật tạm thời mã nguồn build.gradle.kts để bản đóng gói APK chứa đúng metadata phiên bản mới nhất
+          sed -i "s/versionCode = .*/versionCode = $VERSION_CODE/g" app/build.gradle.kts
+          sed -i "s/versionName = .*/versionName = \"$VERSION_NAME\"/g" app/build.gradle.kts
+          echo "✅ Đã cập nhật versionCode sang $VERSION_CODE và versionName sang $VERSION_NAME thành công!"
+
           # Đường dẫn tải trực tiếp APK từ Release của repo tương ứng
           APK_URL="https://github.com/${{ github.repository }}/releases/download/${TAG_NAME}/me-va-be-${TAG_NAME}.apk"
           
@@ -74,19 +95,19 @@ jobs:
           {
             "versionName": "${VERSION_NAME}",
             "versionCode": ${VERSION_CODE},
-            "changelog": "• Đã phát hành phiên bản tự động mới nhất ${VERSION_NAME} qua GitHub Actions.\n• Vá bảo mật, tự động tương thích và giải quyết lỗi lặp KSP daemon.\n• Quý khách vui lòng nâng cấp để trải nghiệm mượt mà nhất mốc thai sản.",
+            "changelog": "• Đã phát hành phiên bản tự động mới nhất ${VERSION_NAME} qua GitHub Actions.\n• Khắc phục triệt để lỗi xung đột chữ ký trên điện thoại cũ.\n• Cập nhật các mốc thai sản chi tiết và tính toán thời gian tự động.\n• Vui lòng nhấn cập nhật tại ứng dụng để thưởng thức phiên bản tốt nhất.",
             "apkUrl": "${APK_URL}"
           }
           EOF
           
-          # 3. Đồng bộ hóa File update.json mới và Tag trực tiếp lên Repository của bạn
+          # 3. Đồng bộ hóa File update.json mới, app/build.gradle.kts mới và Tag trực tiếp lên Repository của bạn
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
           git fetch origin main
           git checkout main || git checkout -b main
-          git add update.json
-          git commit -m "Auto-update version config to ${TAG_NAME} [skip ci]" || echo "No changes to commit"
+          git add update.json app/build.gradle.kts
+          git commit -m "Auto-update version config and build.gradle.kts to ${TAG_NAME} [skip ci]" || echo "No changes to commit"
           
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             git tag -d $TAG_NAME || true
@@ -105,10 +126,10 @@ jobs:
 
       - name: Khởi tạo lại Gradle Wrapper để đảm bảo tệp Jar chuẩn (Fix Corrupt Jar)
         run: |
-          gradle wrapper --gradle-version 9.3.1
+          gradle wrapper --gradle-version 8.7
           chmod +x gradlew
 
-      - name: Build ứng dụng thành tệp APK (Sử dụng compiler daemon để tránh lỗi KSP NullPointer)
+      - name: Build ứng dụng thành tệp APK (Sử dụng compiler daemon)
         run: ./gradlew assembleDebug -Pkotlin.compiler.execution.strategy=daemon
 
       - name: Sao chép và Đổi tên tệp APK đầu ra và định danh bản dựng
