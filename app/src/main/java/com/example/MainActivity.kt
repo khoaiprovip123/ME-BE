@@ -2726,6 +2726,8 @@ fun SettingsDrawerContent(
     user: UserEntity,
     onClose: () -> Unit
 ) {
+    val contextForVersion = LocalContext.current
+    val currentVerName = remember(contextForVersion) { getAppVersionName(contextForVersion) }
     val focusManager = LocalFocusManager.current
     var name by remember(user) { mutableStateOf(user.name) }
     var lmpDate by remember(user) { mutableStateOf(user.lmpDate ?: "2026-01-15") }
@@ -3798,7 +3800,7 @@ fun SettingsDrawerContent(
 
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "Mẹ & Bé • Phiên bản v2.6.2 (Golden Release) • Đồng hành yêu thương cùng gia đình Việt.",
+                                    text = "Mẹ & Bé • Phiên bản v$currentVerName (Golden Release) • Đồng hành yêu thương cùng gia đình Việt.",
                                     fontSize = 8.5.sp,
                                     fontStyle = FontStyle.Italic,
                                     color = TextMuted,
@@ -3813,6 +3815,29 @@ fun SettingsDrawerContent(
                 }
             }
         }
+    }
+}
+
+fun getAppVersionName(context: android.content.Context): String {
+    return try {
+        val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+        packageInfo.versionName ?: "2.6.2"
+    } catch (e: Exception) {
+        "2.6.2"
+    }
+}
+
+fun getAppVersionCode(context: android.content.Context): Int {
+    return try {
+        val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            packageInfo.longVersionCode.toInt()
+        } else {
+            @Suppress("DEPRECATION")
+            packageInfo.versionCode
+        }
+    } catch (e: Exception) {
+        262
     }
 }
 
@@ -3856,6 +3881,7 @@ fun GitUpdateComponent() {
                         color = DarkBrownText
                     )
                 }
+                val currentVerName = remember(context) { getAppVersionName(context) }
                 Box(
                     modifier = Modifier
                         .clip(CircleShape)
@@ -3870,14 +3896,14 @@ fun GitUpdateComponent() {
                 ) {
                     Text(
                         text = when (updateState) {
-                            0 -> "v2.6.2"
+                            0 -> "v$currentVerName"
                             1 -> "Đang Check..."
                             2 -> "Mới: v$latestVersionName"
                             3 -> "Đang tải (${(downloadProgress * 100).toInt()}%)"
                             4 -> "Đã cập nhật"
                             5 -> "Lỗi kết nối"
-                            6 -> "v2.6.2 (Mới nhất)"
-                            else -> "v2.6.2"
+                            6 -> "v$currentVerName (Mới nhất)"
+                            else -> "v$currentVerName"
                         },
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
@@ -4013,17 +4039,18 @@ fun GitUpdateComponent() {
                                     latestChangelog = if (obj.has("changelog")) obj.getString("changelog") else "• Cập nhật các bản sửa lỗi và tính năng mới."
                                     apkDownloadUrl = if (obj.has("apkUrl")) obj.getString("apkUrl") else ""
                                     
-                                    val currentCode = 262 // app version 2.6.2
+                                    val currentCode = getAppVersionCode(context)
+                                    val currentName = getAppVersionName(context)
                                     if (latestVersionCode > currentCode) {
                                         updateState = 2
                                         consoleLogs = consoleLogs + listOf(
                                             "Kết quả phân tích: Có bản cập nhật mới v$latestVersionName (Mã bản dựng: $latestVersionCode)!",
-                                            "Bản hiện tại: v2.6.2 (Mã bản dựng: 262)"
+                                            "Bản hiện tại: v$currentName (Mã bản dựng: $currentCode)"
                                         )
                                     } else {
                                         updateState = 6
                                         consoleLogs = consoleLogs + listOf(
-                                            "Kết quả phân tích: Ứng dụng hiện tại v2.6.2 đã là phiên bản mới nhất từ Git!"
+                                            "Kết quả phân tích: Ứng dụng hiện tại v$currentName đã là phiên bản mới nhất từ Git!"
                                         )
                                     }
                                 } catch (e: Exception) {

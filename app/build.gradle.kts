@@ -14,8 +14,8 @@ android {
     applicationId = "com.aistudio.mevabe.kpyqvl"
     minSdk = 24
     targetSdk = 36
-    versionCode = 264
-    versionName = "2.6.4"
+    versionCode = 262
+    versionName = "2.6.2"
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
   }
