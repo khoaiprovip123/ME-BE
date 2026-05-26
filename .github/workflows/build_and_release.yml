@@ -31,8 +31,10 @@ jobs:
           java-version: '17'
           cache: 'gradle'
 
-      - name: Cấp quyền thực thi cho Gradle Wrapper
-        run: chmod +x gradlew
+      - name: Khởi tạo lại Gradle Wrapper để tránh lỗi tệp Jar bị hỏng (Corrupt Jar)
+        run: |
+          gradle wrapper --gradle-version 9.3.1
+          chmod +x gradlew
 
       - name: Tự động tạo và Cập nhật File update.json trên nhánh main
         run: |
