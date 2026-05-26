@@ -1,0 +1,6 @@
+{
+  "versionName": "2.6.3",
+  "versionCode": 263,
+  "changelog": "• Tính năng Cập nhật Tự động (Auto Update) qua Git hoạt động ổn định.\n• Tối ưu hóa hiệu năng, giảm thời gian khởi động ứng dụng.\n• Tự động kết nối, tự quản lý tệp APK tải về bảo mật.\n• Sửa một số lỗi hiển thị giao diện mốc tuần thai sản.",
+  "apkUrl": "https://raw.githubusercontent.com/vankhoai690/me-va-be/main/me-va-be-v2.6.3.apk"
+}
